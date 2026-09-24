@@ -6,6 +6,8 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 **Aktueller Stand:** Node-RED Flow **v2.4** · HA Package **v2.5** · Dashboard **v1.7**
 
+[![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
+
 ## Inhalt dieses Repos
 
 | Datei | Zweck |
@@ -393,6 +395,25 @@ Prüfe in Reihenfolge:
 - Math.round() für Präzision
 - API-Validierung (92% weniger Calls)
 - Hysterese 3 Min / 1A Schwelle
+
+---
+
+## Lizenz
+
+© 2026 Patrick Lang — lizenziert unter [**CC BY-NC-SA 4.0**](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.de) (Namensnennung – Nicht kommerziell – Weitergabe unter gleichen Bedingungen). Vollständiger Text: [`LICENSE`](LICENSE).
+
+Du darfst dieses Projekt:
+- **nutzen, kopieren und weitergeben**
+- **verändern und darauf aufbauen**
+
+unter folgenden Bedingungen:
+- **Namensnennung:** Patrick Lang als Urheber nennen, auf dieses Repository und die Lizenz verweisen und angeben, ob Änderungen vorgenommen wurden — das gilt auch für abgeänderte Versionen.
+- **Nicht kommerziell:** Keine Nutzung, mit der Geld verdient wird.
+- **Weitergabe unter gleichen Bedingungen:** Veränderte Versionen müssen ebenfalls unter CC BY-NC-SA 4.0 stehen.
+
+### Kommerzielle Nutzung nur nach Rücksprache
+
+Wer mit diesem Projekt Geld verdienen möchte — z. B. durch Verkauf, Einbau in kostenpflichtige Produkte oder bezahlte Installation/Dienstleistungen —, braucht **vorher eine gesonderte, schriftliche Erlaubnis** von Patrick Lang. Anfrage bitte über ein [GitHub-Issue](https://github.com/seemedFilm/HA-Easee-Wallbox-control/issues) in diesem Repository.
 
 ---
 
