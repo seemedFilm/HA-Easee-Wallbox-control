@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smartes PV-Laden Dashboard v1.6</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Surfaces */
+            --surface-1: #fcfcfb;
+            --surface-page: #f9f9f7;
+
+            /* Text */
+            --text-primary: #0b0b0b;
+            --text-secondary: #52514e;
+            --text-muted: #898781;
+
+            /* Categorical palette */
+            --series-1: #2a78d6;  /* blue - PV */
+            --series-2: #1baf7a;  /* aqua - Battery */
+            --series-3: #eda100;  /* yellow - Grid */
+            --series-4: #008300;  /* green - Car */
+            --series-5: #4a3aa7;  /* violet */
+            --series-6: #e34948;  /* red - Consumption */
+
+            /* Status */
+            --status-good: #0ca30c;
+            --status-warning: #fab219;
+            --status-serious: #ec835a;
+            --status-critical: #d03b3b;
+
+            /* Chrome */
+            --gridline: #e1e0d9;
+            --baseline: #c3c2b7;
+            --border: rgba(11,11,11,0.10);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --surface-1: #1a1a19;
+                --surface-page: #0d0d0d;
+                --text-primary: #ffffff;
+                --text-secondary: #c3c2b7;
+                --text-muted: #898781;
+                --series-1: #3987e5;
+                --series-2: #199e70;
+                --series-3: #c98500;
+                --series-4: #008300;
+                --series-5: #9085e9;
+                --series-6: #e66767;
+                --gridline: #2c2c2a;
+                --baseline: #383835;
+                --border: rgba(255,255,255,0.10);
+            }
+        }
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            background: var(--surface-page);
+            color: var(--text-primary);
+            padding: 24px;
+            line-height: 1.5;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--surface-1);
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .stat-value {
+            font-size: 48px;
+            font-weight: 600;
+            line-height: 1;
+            margin-bottom: 4px;
+        }
+
+        .stat-unit {
+            font-size: 20px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .mode-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 12px;
+        }
+
+        .mode-idle { background: var(--gridline); color: var(--text-primary); }
+        .mode-pv { background: var(--series-1); color: white; }
+        .mode-bridge { background: var(--status-warning); color: var(--text-primary); }
+        .mode-force { background: var(--status-critical); color: white; }
+
+        .chart-container {
+            background: var(--surface-1);
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .power-flow {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            align-items: center;
+        }
+
+        .flow-node {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+            position: relative;
+        }
+
+        .flow-node-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .flow-node-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .flow-node-value {
+            font-size: 28px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .flow-node-unit {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .flow-arrow {
+            position: absolute;
+            right: -28px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: var(--text-muted);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--gridline);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .controls {
+            background: var(--surface-1);
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: var(--series-1);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.1);
+        }
+
+        .btn-secondary {
+            background: var(--gridline);
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            filter: brightness(0.95);
+        }
+
+        .btn-danger {
+            background: var(--status-critical);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--status-warning);
+            color: var(--text-primary);
+        }
+
+        .legend {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--gridline);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .legend-marker {
+            width: 16px;
+            height: 16px;
+            border-radius: 2px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--gridline);
+        }
+
+        .status-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .status-value {
+            font-size: 14px;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timestamp {
+            text-align: right;
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .power-flow {
+                grid-template-columns: 1fr;
+            }
+
+            .flow-arrow {
+                right: 50%;
+                top: auto;
+                bottom: -32px;
+                transform: translateX(50%) rotate(90deg);
+            }
+        }
+
+        .alert {
+            padding: 16px;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background: rgba(42, 120, 214, 0.1);
+            border: 1px solid var(--series-1);
+            color: var(--text-primary);
+        }
+
+        .alert-warning {
+            background: rgba(250, 178, 25, 0.1);
+            border: 1px solid var(--status-warning);
+        }
+
+        .alert-icon {
+            font-size: 20px;
+        }
+
+        .config-section {
+            background: var(--surface-1);
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+
+        .config-row {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 16px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--gridline);
+            align-items: center;
+        }
+
+        .config-row:last-child {
+            border-bottom: none;
+        }
+
+        .config-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .config-value {
+            font-size: 14px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-active {
+            background: var(--status-good);
+            color: white;
+        }
+
+        .badge-inactive {
+            background: var(--gridline);
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <h1>⚡ Smartes PV-Laden Dashboard</h1>
+            <p class="subtitle">Intelligentes Überschussladen für Easee Wallbox mit RCT Wechselrichter — Version 1.6</p>
+        </header>
+
+        <!-- System Status Alert -->
+        <div id="systemAlert" class="alert alert-info">
+            <span class="alert-icon">ℹ️</span>
+            <span>System initialisiert. Warte auf Sensordaten...</span>
+        </div>
+
+        <!-- KPI Grid -->
+        <div class="grid">
+            <!-- PV Überschuss -->
+            <div class="card">
+                <div class="card-title">Verfügbarer PV-Überschuss</div>
+                <div class="stat-value">
+                    <span id="surplus">0</span><span class="stat-unit">W</span>
+                </div>
+                <div class="stat-label">Zum Laden verfügbar</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="surplusBar" style="background: var(--series-1); width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Lade-Modus -->
+            <div class="card">
+                <div class="card-title">Lade-Modus</div>
+                <div style="font-size: 24px; margin: 12px 0;">
+                    <span id="modeIcon">⏸️</span> <span id="modeText" style="font-weight: 600;">Inaktiv</span>
+                </div>
+                <div class="mode-indicator mode-idle" id="modeIndicator">
+                    <span id="modeReason">System bereit</span>
+                </div>
+            </div>
+
+            <!-- Ladestrom -->
+            <div class="card">
+                <div class="card-title">Aktueller Ladestrom</div>
+                <div class="stat-value">
+                    <span id="chargeCurrent">0</span><span class="stat-unit">A</span>
+                </div>
+                <div class="stat-label">
+                    <span id="chargePower">0</span> kW Ladeleistung
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="currentBar" style="background: var(--series-4); width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Auto SOC -->
+            <div class="card">
+                <div class="card-title">Renault Zoe Ladezustand</div>
+                <div class="stat-value">
+                    <span id="carSOC">0</span><span class="stat-unit">%</span>
+                </div>
+                <div class="stat-label">
+                    <span id="plugStatus">Nicht angeschlossen</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="carBar" style="background: var(--series-4); width: 0%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Energiefluss -->
+        <div class="chart-container">
+            <div class="chart-title">Energiefluss (Echtzeit)</div>
+            <div class="power-flow">
+                <div class="flow-node" style="border-color: var(--series-1);">
+                    <div class="flow-node-icon">☀️</div>
+                    <div class="flow-node-label">PV-Anlage</div>
+                    <div class="flow-node-value">
+                        <span id="pvPower">0</span><span class="flow-node-unit">W</span>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                </div>
+
+                <div class="flow-node" style="border-color: var(--series-2);">
+                    <div class="flow-node-icon">🔋</div>
+                    <div class="flow-node-label">Hausspeicher</div>
+                    <div class="flow-node-value">
+                        <span id="batterySOC">0</span><span class="flow-node-unit">%</span>
+                    </div>
+                    <div class="stat-label" style="margin-top: 8px;">
+                        <span id="batteryPower">0</span> W
+                    </div>
+                    <div class="flow-arrow">→</div>
+                </div>
+
+                <div class="flow-node" style="border-color: var(--series-3);">
+                    <div class="flow-node-icon">🏠</div>
+                    <div class="flow-node-label">Netz</div>
+                    <div class="flow-node-value">
+                        <span id="gridPower">0</span><span class="flow-node-unit">W</span>
+                    </div>
+                    <div class="stat-label" style="margin-top: 8px;" id="gridDirection">Einspeisung</div>
+                    <div class="flow-arrow">→</div>
+                </div>
+
+                <div class="flow-node" style="border-color: var(--series-4);">
+                    <div class="flow-node-icon">🚗</div>
+                    <div class="flow-node-label">Wallbox</div>
+                    <div class="flow-node-value">
+                        <span id="wallboxPower">0</span><span class="flow-node-unit">W</span>
+                    </div>
+                    <div class="stat-label" style="margin-top: 8px;">
+                        <span id="wallboxCurrent">0</span> A
+                    </div>
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-marker" style="background: var(--series-1);"></div>
+                    <span>PV-Erzeugung</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-marker" style="background: var(--series-2);"></div>
+                    <span>Batterie</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-marker" style="background: var(--series-3);"></div>
+                    <span>Netz (+ = Bezug, − = Einspeisung)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-marker" style="background: var(--series-4);"></div>
+                    <span>Wallbox</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manuelle Steuerung -->
+        <div class="controls">
+            <div class="chart-title">Manuelle Steuerung</div>
+            <div class="control-group">
+                <button class="btn btn-primary" onclick="setMode('auto')">🔄 Automatik</button>
+                <button class="btn btn-warning" onclick="setMode('force_charge')">⚡ Laden erzwingen</button>
+                <button class="btn btn-danger" onclick="setMode('force_stop')">🛑 Stoppen</button>
+                <button class="btn btn-secondary" onclick="setMode('pv_only')">☀️ Nur PV-Überschuss</button>
+            </div>
+            <div class="alert alert-info" style="margin-top: 16px;">
+                <span class="alert-icon">💡</span>
+                <span><strong>Hinweis:</strong> "Laden erzwingen" überschreibt das 80%-Limit und lädt mit 16A aus dem Netz.</span>
+            </div>
+        </div>
+
+        <!-- Systemstatus -->
+        <div class="config-section">
+            <div class="chart-title">Systemstatus & Konfiguration</div>
+
+            <div class="status-grid">
+                <div>
+                    <div class="status-item">
+                        <span class="status-label">System-Status</span>
+                        <span class="status-value">
+                            <span class="badge badge-active" id="systemStatus">AKTIV</span>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Batterie-Priorität</span>
+                        <span class="status-value" id="batteryPriority">95%</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Auto-Ziel-SOC</span>
+                        <span class="status-value">80%</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Min. Ladestrom</span>
+                        <span class="status-value">7 A</span>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="status-item">
+                        <span class="status-label">Max. Ladestrom</span>
+                        <span class="status-value">32 A</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Phasen</span>
+                        <span class="status-value">3</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Überbrückung</span>
+                        <span class="status-value" id="bridgeStatus">
+                            <span class="badge badge-active">AKTIV</span>
+                        </span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Max. Überbrückungszeit</span>
+                        <span class="status-value">10 min</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="timestamp">
+            Letzte Aktualisierung: <span id="lastUpdate">--</span>
+        </div>
+    </div>
+
+    <script>
+        // Simulierte Daten (in Produktion würden diese von Node-RED kommen)
+        const mockData = {
+            rct: {
+                grid_power: -2400,  // Negativ = Einspeisung
+                battery_soc: 96,
+                battery_power: -800,  // Negativ = Ladend
+                inverter_power: 6800,
+                consumer_power: 3600
+            },
+            easee: {
+                power: 4200,
+                current: 7,
+                charging: true
+            },
+            zoe: {
+                battery: 65,
+                plug_state: 'Plugged in',
+                charge_state: 'Charging'
+            },
+            control: {
+                action: 'charge',
+                mode: 'pv_surplus',
+                reason: 'PV-Überschuss: 6600W',
+                target_current: 7,
+                calculated_power: 4830
+            },
+            calculated: {
+                available_surplus: 6600
+            }
+        };
+
+        function updateDashboard(data) {
+            // KPIs
+            document.getElementById('surplus').textContent = Math.round(data.calculated.available_surplus);
+            const surplusPercent = Math.min(100, (data.calculated.available_surplus / 10000) * 100);
+            document.getElementById('surplusBar').style.width = surplusPercent + '%';
+
+            document.getElementById('chargeCurrent').textContent = data.easee.current;
+            document.getElementById('chargePower').textContent = (data.easee.power / 1000).toFixed(1);
+            const currentPercent = (data.easee.current / 32) * 100;
+            document.getElementById('currentBar').style.width = currentPercent + '%';
+
+            document.getElementById('carSOC').textContent = data.zoe.battery;
+            document.getElementById('carBar').style.width = data.zoe.battery + '%';
+
+            // Plug Status
+            const plugStatus = data.zoe.plug_state === 'Plugged in'
+                ? `🔌 Angeschlossen — ${data.zoe.charge_state}`
+                : '❌ Nicht angeschlossen';
+            document.getElementById('plugStatus').textContent = plugStatus;
+
+            // Modus
+            const modeConfig = {
+                'idle': { icon: '⏸️', text: 'Inaktiv', class: 'mode-idle' },
+                'pv_surplus': { icon: '☀️', text: 'PV-Überschuss', class: 'mode-pv' },
+                'bridge': { icon: '🌉', text: 'Überbrückung', class: 'mode-bridge' },
+                'force_charge': { icon: '⚡', text: 'Erzwungen', class: 'mode-force' }
+            };
+
+            const mode = modeConfig[data.control.mode] || modeConfig['idle'];
+            document.getElementById('modeIcon').textContent = mode.icon;
+            document.getElementById('modeText').textContent = mode.text;
+            document.getElementById('modeReason').textContent = data.control.reason;
+
+            const indicator = document.getElementById('modeIndicator');
+            indicator.className = 'mode-indicator ' + mode.class;
+
+            // Energiefluss
+            document.getElementById('pvPower').textContent = Math.round(data.rct.inverter_power);
+            document.getElementById('batterySOC').textContent = data.rct.battery_soc;
+            document.getElementById('batteryPower').textContent = Math.round(Math.abs(data.rct.battery_power)) + (data.rct.battery_power < 0 ? ' (laden)' : ' (entladen)');
+
+            const gridPower = Math.abs(data.rct.grid_power);
+            document.getElementById('gridPower').textContent = Math.round(gridPower);
+            document.getElementById('gridDirection').textContent = data.rct.grid_power < 0 ? '⬇️ Einspeisung' : '⬆️ Bezug';
+
+            document.getElementById('wallboxPower').textContent = Math.round(data.easee.power);
+            document.getElementById('wallboxCurrent').textContent = data.easee.current;
+
+            // System Alert
+            const alert = document.getElementById('systemAlert');
+            if (data.control.mode === 'force_charge') {
+                alert.className = 'alert alert-warning';
+                alert.innerHTML = '<span class="alert-icon">⚠️</span><span><strong>Warnung:</strong> Manuelles Laden aktiv. 80%-Limit außer Kraft gesetzt.</span>';
+            } else if (data.zoe.battery >= 80) {
+                alert.className = 'alert alert-info';
+                alert.innerHTML = '<span class="alert-icon">✅</span><span><strong>Ziel erreicht:</strong> Auto-SOC bei ' + data.zoe.battery + '% (Hard-Limit 80%).</span>';
+            } else if (data.control.mode === 'bridge') {
+                alert.className = 'alert alert-warning';
+                alert.innerHTML = '<span class="alert-icon">🌉</span><span><strong>Überbrückung aktiv:</strong> Minimaler Ladestrom bei niedrigem Überschuss.</span>';
+            } else {
+                alert.className = 'alert alert-info';
+                alert.innerHTML = '<span class="alert-icon">✅</span><span>System läuft normal. Modus: ' + mode.text + '</span>';
+            }
+
+            // Timestamp
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleString('de-DE');
+        }
+
+        function setMode(mode) {
+            console.log('Setze Modus:', mode);
+            alert('Modus "' + mode + '" würde jetzt an Node-RED gesendet werden.\n\nIn Produktion: HTTP POST an Node-RED Endpoint mit override_mode.');
+
+            // Simuliere Modus-Änderung
+            if (mode === 'force_charge') {
+                mockData.control.mode = 'force_charge';
+                mockData.control.reason = 'Manuell erzwungen mit 16A';
+                mockData.easee.current = 16;
+                mockData.easee.power = 11040;
+            } else if (mode === 'force_stop') {
+                mockData.control.mode = 'idle';
+                mockData.control.reason = 'Manuell gestoppt';
+                mockData.easee.current = 0;
+                mockData.easee.power = 0;
+                mockData.easee.charging = false;
+            } else if (mode === 'auto') {
+                mockData.control.mode = 'pv_surplus';
+                mockData.control.reason = 'Automatische Steuerung aktiv';
+            } else if (mode === 'pv_only') {
+                mockData.control.mode = 'pv_surplus';
+                mockData.control.reason = 'Nur PV-Überschuss (Überbrückung deaktiviert)';
+            }
+
+            updateDashboard(mockData);
+        }
+
+        // Initial load
+        updateDashboard(mockData);
+
+        // Simuliere Live-Updates (alle 5 Sekunden)
+        setInterval(() => {
+            // Simuliere kleine Änderungen
+            mockData.calculated.available_surplus += Math.random() * 200 - 100;
+            mockData.rct.grid_power = -mockData.calculated.available_surplus;
+            mockData.rct.inverter_power += Math.random() * 100 - 50;
+
+            if (mockData.easee.charging) {
+                mockData.zoe.battery += 0.1;
+                if (mockData.zoe.battery >= 80 && mockData.control.mode !== 'force_charge') {
+                    mockData.easee.charging = false;
+                    mockData.easee.current = 0;
+                    mockData.easee.power = 0;
+                    mockData.control.mode = 'idle';
+                    mockData.control.reason = 'Auto-SOC 80% erreicht (Hard-Limit)';
+                }
+            }
+
+            updateDashboard(mockData);
+        }, 5000);
+
+        console.log('Dashboard geladen. Mock-Daten werden alle 5 Sekunden aktualisiert.');
+        console.log('In Produktion: Verbinde mit Node-RED WebSocket oder HTTP API für Echtzeit-Daten.');
+    </script>
+</body>
+</html>

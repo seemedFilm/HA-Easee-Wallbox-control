@@ -1,0 +1,14 @@
+# Claude Code Projektdaten (Verlauf kann Zugangsdaten enthalten)
+.claude/
+.claude.json
+CLAUDE.local.md
+
+# Windows / Editor
+desktop.ini
+Thumbs.db
+.vscode/
+*.swp
+
+# Lokale Geheimnisse
+secrets.yaml
+*.env

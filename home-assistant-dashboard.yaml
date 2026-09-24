@@ -1,0 +1,781 @@
+# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.7
+#
+# Installation:
+# 1. Settings → Dashboards → "+ Add Dashboard"
+# 2. Name: "PV-Laden"
+# 3. Icon: mdi:car-electric
+# 4. "Show in sidebar" aktivieren
+# 5. Dashboard öffnen → ⋮ → "Raw configuration editor"
+# 6. Diesen YAML-Code einfügen
+#
+# ===== REVISIONSHISTORIE =====
+# v1.7 (2026-09-21): Kosten-Update integriert (siehe home-assistant-configuration.yaml,
+#   Abschnitt "MONATSAUSWERTUNG WALLBOX-LADEN"):
+#   - Neue Badge "Netzladekosten (Monat)" in der Übersicht
+#   - Neue KPI-Kachel "Netzladekosten (aktuell)" (EUR/h, live)
+#   - Neue Sektion "Kostenauswertung" in den System-Details
+#   - Neues Verlaufs-Chart "Netzladekosten-Rate (24h)"
+#   HINWEIS: Die zugrundeliegenden Sensoren (sensor.wallbox_grid_charge_power,
+#   sensor.wallbox_grid_charge_cost_rate, sensor.wallbox_grid_charge_cost_total,
+#   sensor.wallbox_energy_monthly, sensor.wallbox_grid_cost_monthly) waren zum
+#   Zeitpunkt dieser Revision noch NICHT in der Live-Instanz vorhanden — die
+#   entsprechenden Abschnitte aus home-assistant-configuration.yaml müssen zuerst
+#   in die echte configuration.yaml übernommen und HA neu geladen werden, sonst
+#   zeigen die neuen Karten "unbekannt"/"unavailable".
+# v1.6 (Vorgänger): siehe archive/home-assistant-dashboard_v1.6.yaml
+
+title: Smartes PV-Laden
+views:
+  - title: Übersicht
+    path: overview
+    icon: mdi:lightning-bolt
+    badges:
+      - entity: sensor.wallbox_grid_cost_monthly
+        name: Netzladekosten (Monat)
+        icon: mdi:cash
+    cards:
+      # ===== HEADER: System-Status =====
+      - type: markdown
+        content: |
+          # ⚡ Smartes PV-Laden v1.7
+          Intelligentes Überschussladen für Easee Wallbox mit RCT Wechselrichter
+
+      # ===== ALERT BANNER =====
+      - type: conditional
+        conditions:
+          - entity: input_select.lade_modus
+            state: laden
+        card:
+          type: markdown
+          content: |
+            ⚠️ **Warnung:** Manuelles Laden aktiv.
+          card_mod:
+            style: |
+              ha-card {
+                background: rgba(250, 178, 25, 0.2);
+                border-left: 4px solid #fab219;
+              }
+
+      - type: conditional
+        conditions:
+          - entity: input_boolean.soc_override
+            state: "on"
+        card:
+          type: markdown
+          content: |
+            🔋 **SOC-Override AKTIV** — Auto lädt über das 80%-Limit hinaus! Wird automatisch zurückgesetzt bei Ausstecken oder nach {{ states('input_number.soc_override_max_duration') | int }} Minuten.
+          card_mod:
+            style: |
+              ha-card {
+                background: rgba(227, 73, 72, 0.2);
+                border-left: 4px solid #e34948;
+              }
+
+      # ===== KPI GRID: Hauptmetriken =====
+      - type: grid
+        columns: 5
+        square: false
+        cards:
+          # PV-Überschuss
+          - type: custom:mushroom-template-card
+            primary: Verfügbarer Überschuss
+            secondary: |
+              {{ states('sensor.calculated_pv_surplus') | float | round(0) }} W
+            icon: mdi:solar-power-variant
+            icon_color: blue
+            badge_color: blue
+            badge_icon: mdi:arrow-up
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.calculated_pv_surplus
+
+          # Lade-Modus
+          - type: custom:mushroom-template-card
+            primary: Lade-Modus
+            secondary: |
+              {% if states('input_select.lade_modus') == 'automatik' %}
+                {% if is_state('binary_sensor.battery_soc_above_minimum', 'off') %}
+                  ⏳ RCT Battery SoC nicht erreicht
+                {% else %}
+                  🔄 Automatik
+                {% endif %}
+              {% elif states('input_select.lade_modus') == 'laden' %}
+                ⚡ Erzwungen
+              {% elif states('input_select.lade_modus') == 'stoppen' %}
+                🛑 Gestoppt
+              {% elif states('input_select.lade_modus') == 'günstigster_strom' %}
+                💶 Günstigster Strom
+              {% else %}
+                ☀️ Nur PV
+              {% endif %}
+            icon: mdi:autorenew
+            icon_color: |
+              {% if states('input_select.lade_modus') == 'automatik' %}
+                {% if is_state('binary_sensor.battery_soc_above_minimum', 'off') %}
+                  amber
+                {% else %}
+                  green
+                {% endif %}
+              {% elif states('input_select.lade_modus') == 'laden' %}
+                red
+              {% elif states('input_select.lade_modus') == 'günstigster_strom' %}
+                purple
+              {% else %}
+                amber
+              {% endif %}
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: input_select.lade_modus
+
+          # Ladestrom
+          - type: custom:mushroom-template-card
+            primary: Ladestrom
+            secondary: |
+              {{ states('sensor.easee_home_dynamic_charger_limit') | float | round(1) }} A
+              ({{ (states('sensor.easee_home_power') | float / 1000) | round(1) }} kW)
+            icon: mdi:current-ac
+            icon_color: |
+              {% if is_state('sensor.easee_home_status', 'charging') %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.easee_home_power
+
+          # Auto SOC
+          - type: custom:mushroom-template-card
+            primary: Renault Zoe
+            secondary: |
+              {{ states('sensor.zoe_battery') | float | round(0) }}%
+              {% if states('sensor.zoe_plug_state') == 'Plugged in' %}
+                🔌
+              {% endif %}
+            icon: mdi:car-electric
+            icon_color: |
+              {% set soc = states('sensor.zoe_battery') | float %}
+              {% if soc >= 80 %}
+                green
+              {% elif soc >= 50 %}
+                amber
+              {% else %}
+                red
+              {% endif %}
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.zoe_battery
+
+          # Netzladekosten (aktuell)
+          - type: custom:mushroom-template-card
+            primary: Netzladekosten
+            secondary: |
+              {{ states('sensor.wallbox_grid_charge_cost_rate') | float(0) | round(2) }} €/h
+              ({{ states('sensor.wallbox_grid_charge_power') | float(0) | round(0) }} W aus Netz)
+            icon: mdi:cash-clock
+            icon_color: |
+              {% set rate = states('sensor.wallbox_grid_charge_cost_rate') | float(0) %}
+              {% if rate <= 0 %}
+                green
+              {% elif rate < 1 %}
+                amber
+              {% else %}
+                red
+              {% endif %}
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.wallbox_grid_charge_cost_rate
+
+      # ===== ENERGIEFLUSS-VISUALISIERUNG =====
+      - type: custom:power-flow-card-plus
+        title: Energiefluss (Echtzeit)
+        entities:
+          grid:
+            entity: sensor.rct_power_storage_grid_power
+            name: Netz
+            icon: mdi:transmission-tower
+          solar:
+            entity: sensor.rct_power_storage_inverter_ac_power
+            name: PV-Anlage
+            icon: mdi:solar-power
+          battery:
+            entity: sensor.rct_power_storage_battery_power
+            state_of_charge: sensor.rct_power_storage_battery_state_of_charge
+            name: Speicher
+            icon: mdi:battery-high
+          home:
+            entity: sensor.rct_power_storage_consumer_power
+            name: Hausverbrauch
+            icon: mdi:home
+          individual1:
+            entity: sensor.easee_home_power
+            name: Wallbox
+            icon: mdi:ev-station
+            display_state: one_way
+            color_value: true
+        clickable_entities: true
+        display_zero_lines: false
+        use_new_flow_rate_model: true
+        w_decimals: 0
+        kw_decimals: 2
+
+      # ===== MONATSAUSWERTUNG: Wallbox-Laden =====
+      - type: markdown
+        title: 💶 Monatsauswertung Wallbox-Laden
+        content: |
+          | | Dieser Monat | Vormonat |
+          |---|---|---|
+          | ⚡ Geladene Energie (Netz + PV) | **{{ states('sensor.wallbox_energy_monthly') }} kWh** | {{ state_attr('sensor.wallbox_energy_monthly', 'last_period') }} kWh |
+          | 💶 Netzladekosten (nur Netzbezug, ohne PV) | **{{ states('sensor.wallbox_grid_cost_monthly') }} €** | {{ state_attr('sensor.wallbox_grid_cost_monthly', 'last_period') }} € |
+
+          *Reset jeweils zum 1. des Monats. PV-Strom fließt nicht in die Kostenberechnung ein.*
+
+      # ===== ALTERNATIVE: Energiefluss als Gauge-Grid =====
+      # (Falls power-flow-card-plus nicht installiert ist)
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.rct_power_storage_inverter_ac_power
+            name: PV-Anlage
+            unit: W
+            min: 0
+            max: 10000
+            severity:
+              green: 3000
+              yellow: 1500
+              red: 0
+            needle: true
+
+          - type: gauge
+            entity: sensor.rct_power_storage_battery_state_of_charge
+            name: Speicher SOC
+            unit: '%'
+            min: 0
+            max: 100
+            severity:
+              green: 80
+              yellow: 50
+              red: 20
+            needle: true
+
+          - type: gauge
+            entity: sensor.rct_power_storage_grid_power
+            name: Netz
+            unit: W
+            min: -5000
+            max: 5000
+            severity:
+              green: -1000
+              yellow: 0
+              red: 1000
+            needle: true
+
+          - type: gauge
+            entity: sensor.easee_home_power
+            name: Wallbox
+            unit: W
+            min: 0
+            max: 22000
+            severity:
+              green: 11000
+              yellow: 4200
+              red: 0
+            needle: true
+
+      # ===== MANUELLE STEUERUNG =====
+      - type: entities
+        title: 🎛️ Manuelle Steuerung
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: input_select.lade_modus
+            name: Lade-Modus
+            icon: mdi:lightning-bolt-circle
+
+          - type: divider
+
+          - type: conditional
+            conditions:
+              - entity: binary_sensor.battery_soc_above_minimum
+                state: "on"
+            row:
+              type: button
+              name: 🔄 Automatik
+              icon: mdi:autorenew
+              tap_action:
+                action: call-service
+                service: input_select.select_option
+                service_data:
+                  entity_id: input_select.lade_modus
+                  option: automatik
+
+          - type: conditional
+            conditions:
+              - entity: binary_sensor.battery_soc_above_minimum
+                state: "off"
+            row:
+              type: button
+              name: 🔄 Automatik - Battery SoC nicht erreicht
+              icon: mdi:autorenew
+              tap_action:
+                action: call-service
+                service: input_select.select_option
+                service_data:
+                  entity_id: input_select.lade_modus
+                  option: automatik
+
+          - type: button
+            name: ⚡ Laden erzwingen
+            icon: mdi:flash
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              service_data:
+                entity_id: input_select.lade_modus
+                option: laden
+
+          - entity: input_boolean.soc_override
+            name: Ziel-SOC überbrücken (SOC-Override, gilt für alle Modi)
+            icon: mdi:battery-alert-variant
+
+          - type: button
+            name: 🛑 Stoppen
+            icon: mdi:stop-circle
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              service_data:
+                entity_id: input_select.lade_modus
+                option: stoppen
+
+          - type: button
+            name: ☀️ Nur PV-Überschuss
+            icon: mdi:white-balance-sunny
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              service_data:
+                entity_id: input_select.lade_modus
+                option: überschuss
+
+          - type: button
+            name: 💶 Günstigster Strom
+            icon: mdi:cash
+            tap_action:
+              action: call-service
+              service: input_select.select_option
+              service_data:
+                entity_id: input_select.lade_modus
+                option: günstigster_strom
+
+      # ===== DETAILLIERTE SENSOREN =====
+      - type: entities
+        title: 📊 System-Details
+        show_header_toggle: false
+        state_color: true
+        entities:
+          # RCT Sensoren
+          - type: section
+            label: RCT Power Storage
+
+          - entity: sensor.rct_power_storage_grid_power
+            name: Netzleistung
+            icon: mdi:transmission-tower
+            secondary_info: last-changed
+
+          - entity: sensor.rct_power_storage_battery_state_of_charge
+            name: Speicher-SOC
+            icon: mdi:battery-high
+            secondary_info: last-changed
+
+          - entity: sensor.rct_power_storage_battery_power
+            name: Speicher-Leistung
+            icon: mdi:battery-charging
+            secondary_info: last-changed
+
+          - entity: sensor.rct_power_storage_inverter_ac_power
+            name: PV-Leistung (AC)
+            icon: mdi:solar-power
+            secondary_info: last-changed
+
+          - entity: sensor.rct_power_storage_consumer_power
+            name: Verbrauch (Haus)
+            icon: mdi:home-lightning-bolt
+            secondary_info: last-changed
+
+          # Easee Sensoren
+          - type: section
+            label: Easee Wallbox
+
+          - entity: sensor.easee_home_power
+            name: Wallbox-Leistung
+            icon: mdi:ev-station
+            secondary_info: last-changed
+
+          - entity: sensor.easee_home_dynamic_charger_limit
+            name: Ladestrom (Limit)
+            icon: mdi:current-ac
+            secondary_info: last-changed
+
+          - entity: sensor.easee_home_status
+            name: Ladevorgang aktiv
+            icon: mdi:battery-charging
+            secondary_info: last-changed
+
+          # Zoe Sensoren
+          - type: section
+            label: Renault Zoe
+
+          - entity: sensor.zoe_battery
+            name: Batterie-SOC
+            icon: mdi:battery-60
+            secondary_info: last-changed
+
+          - entity: sensor.zoe_plug_state
+            name: Anschluss-Status
+            icon: mdi:power-plug
+            secondary_info: last-changed
+
+          - entity: sensor.zoe_charge_state
+            name: Lade-Status
+            icon: mdi:ev-station
+            secondary_info: last-changed
+
+          # Kostenauswertung
+          - type: section
+            label: Kostenauswertung
+
+          - entity: sensor.wallbox_grid_charge_power
+            name: Netzladeleistung
+            icon: mdi:transmission-tower-import
+            secondary_info: last-changed
+
+          - entity: sensor.wallbox_grid_charge_cost_rate
+            name: Netzladekosten-Rate
+            icon: mdi:cash-clock
+            secondary_info: last-changed
+
+          - entity: sensor.wallbox_grid_charge_cost_total
+            name: Netzladekosten (seit Start)
+            icon: mdi:cash-multiple
+            secondary_info: last-changed
+
+          - entity: sensor.wallbox_energy_monthly
+            name: Ladeenergie (Monat)
+            icon: mdi:calendar-month
+            secondary_info: last-changed
+
+          - entity: sensor.wallbox_grid_cost_monthly
+            name: Netzladekosten (Monat)
+            icon: mdi:calendar-cash
+            secondary_info: last-changed
+
+      # ===== KONFIGURATION & LIMITS =====
+      - type: entities
+        title: ⚙️ System-Konfiguration
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: Lade-Limits
+
+          - entity: input_number.min_charge_current
+            name: Min. Ladestrom
+            icon: mdi:current-ac
+
+          - entity: input_number.max_charge_current
+            name: Max. Ladestrom
+            icon: mdi:current-ac
+
+          - entity: input_number.car_target_soc
+            name: Auto-Ziel-SOC (Hard-Limit)
+            icon: mdi:battery-80
+
+          - type: section
+            label: Batterie-Management
+
+          - entity: input_boolean.battery_priority
+            name: Batterie-Priorität
+            icon: mdi:battery-arrow-up
+
+          - entity: input_number.min_battery_soc
+            name: Min. Batterie-SOC
+            icon: mdi:battery-50
+
+          - entity: input_boolean.prevent_battery_discharge
+            name: Entladungsschutz
+            icon: mdi:battery-lock
+
+          - type: section
+            label: SOC-Override
+
+          - entity: input_boolean.soc_override
+            name: 80%-Limit überbrücken
+            icon: mdi:battery-alert-variant
+
+          - entity: input_number.soc_override_max_duration
+            name: Auto-Reset nach
+            icon: mdi:timer-alert
+
+  # ===== ZWEITE ANSICHT: HISTORIE & CHARTS =====
+  - title: Verlauf
+    path: history
+    icon: mdi:chart-line
+    badges: []
+    cards:
+      - type: markdown
+        content: |
+          # 📈 Lade-Historie
+
+      # Ladeleistung über Zeit
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Wallbox-Ladeleistung (24h)
+          show_states: true
+        graph_span: 24h
+        series:
+          - entity: sensor.easee_home_power
+            name: Wallbox
+            type: area
+            color: '#008300'
+            opacity: 0.3
+            stroke_width: 2
+            extend_to: now
+            group_by:
+              func: avg
+              duration: 5m
+
+          - entity: sensor.calculated_pv_surplus
+            name: PV-Überschuss
+            type: line
+            color: '#2a78d6'
+            stroke_width: 2
+            extend_to: now
+            group_by:
+              func: avg
+              duration: 5m
+
+      # PV-Produktion vs. Verbrauch
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Energiefluss (24h)
+          show_states: true
+        graph_span: 24h
+        series:
+          - entity: sensor.rct_power_storage_inverter_ac_power
+            name: PV-Erzeugung
+            type: area
+            color: '#2a78d6'
+            opacity: 0.3
+            stroke_width: 2
+
+          - entity: sensor.rct_power_storage_consumer_power
+            name: Verbrauch
+            type: line
+            color: '#e34948'
+            stroke_width: 2
+
+          - entity: sensor.rct_power_storage_grid_power
+            name: Netz
+            type: line
+            color: '#eda100'
+            stroke_width: 2
+
+      # Batterie-SOC
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Batterie & Auto SOC (24h)
+          show_states: true
+        graph_span: 24h
+        series:
+          - entity: sensor.rct_power_storage_battery_state_of_charge
+            name: Hausspeicher
+            type: line
+            color: '#1baf7a'
+            stroke_width: 2
+
+          - entity: sensor.zoe_battery
+            name: Renault Zoe
+            type: line
+            color: '#008300'
+            stroke_width: 2
+
+      # Wallbox: Gesamtleistung vs. Netz-Anteil (zeigt PV- vs. Netzladeanteil)
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: "Wallbox: Gesamt- vs. Netzladeleistung (24h)"
+          show_states: true
+        graph_span: 24h
+        series:
+          - entity: sensor.easee_home_power
+            name: Wallbox gesamt
+            type: area
+            color: '#008300'
+            opacity: 0.3
+            stroke_width: 2
+            transform: 'return x * 1000;'
+            extend_to: now
+            group_by:
+              func: avg
+              duration: 5m
+
+          - entity: sensor.wallbox_grid_charge_power
+            name: davon Netz
+            type: line
+            color: '#e34948'
+            stroke_width: 2
+            extend_to: now
+            group_by:
+              func: avg
+              duration: 5m
+
+      # Netzladekosten-Rate (zeigt, wann teurer Netzstrom statt PV geladen wird)
+      - type: custom:apexcharts-card
+        header:
+          show: true
+          title: Netzladekosten-Rate (24h)
+          show_states: true
+        graph_span: 24h
+        series:
+          - entity: sensor.wallbox_grid_charge_cost_rate
+            name: Kosten-Rate
+            type: area
+            color: '#eda100'
+            opacity: 0.3
+            stroke_width: 2
+            unit: €/h
+            extend_to: now
+            group_by:
+              func: avg
+              duration: 5m
+
+      # Historische Daten (Standard)
+      - type: history-graph
+        title: Sensoren (48h)
+        hours_to_show: 48
+        entities:
+          - entity: sensor.rct_power_storage_grid_power
+            name: Netz
+          - entity: sensor.easee_home_power
+            name: Wallbox
+          - entity: sensor.easee_home_status
+            name: Ladevorgang
+          - entity: sensor.wallbox_grid_charge_cost_rate
+            name: Netzladekosten-Rate
+
+  # ===== DRITTE ANSICHT: EINSTELLUNGEN =====
+  - title: Einstellungen
+    path: settings
+    icon: mdi:cog
+    badges: []
+    cards:
+      - type: markdown
+        content: |
+          # ⚙️ System-Einstellungen
+
+      # Lade-Parameter
+      - type: entities
+        title: Lade-Parameter
+        show_header_toggle: false
+        entities:
+          - entity: input_number.min_charge_current
+            name: Min. Ladestrom
+            icon: mdi:current-ac
+
+          - entity: input_number.max_charge_current
+            name: Max. Ladestrom
+            icon: mdi:current-ac
+
+          - entity: input_number.phases
+            name: Phasen
+            icon: mdi:sine-wave
+
+          - entity: input_number.hysteresis_time
+            name: Hysterese-Zeit
+            icon: mdi:timer
+
+      # Batterie-Einstellungen
+      - type: entities
+        title: Batterie-Management
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.battery_priority
+            name: Batterie-Priorität
+
+          - entity: input_number.min_battery_soc
+            name: Min. Batterie-SOC
+
+          - entity: input_boolean.prevent_battery_discharge
+            name: Entladungsschutz
+
+          - entity: input_number.max_grid_power_draw
+            name: Max. Netzbezug (bei Schutz)
+
+      # Auto-Einstellungen
+      - type: entities
+        title: Fahrzeug-Einstellungen
+        show_header_toggle: false
+        entities:
+          - entity: input_number.car_target_soc
+            name: Ziel-SOC (Hard-Limit 80%)
+
+          - entity: input_number.car_soc_threshold_pure_surplus
+            name: Schwelle für reinen Überschuss
+
+      # SOC-Override
+      - type: entities
+        title: SOC-Override
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.soc_override
+            name: 80%-Limit überbrücken
+
+          - entity: input_number.soc_override_max_duration
+            name: Auto-Reset nach (Minuten, 0 = aus)
+
+      # Schwellenwerte
+      - type: entities
+        title: Start-Schwellenwerte
+        show_header_toggle: false
+        entities:
+          - entity: input_number.min_surplus_to_start
+            name: Min. Überschuss zum Start
+
+          - entity: input_number.min_surplus_to_continue
+            name: Min. Überschuss zum Weiterladen
+
+      # System-Status
+      - type: entities
+        title: System-Status
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.system_enabled
+            name: System aktiv
+
+          - type: divider
+
+          - type: button
+            name: ⚠️ System deaktivieren
+            icon: mdi:power
+            tap_action:
+              action: call-service
+              service: input_boolean.turn_off
+              service_data:
+                entity_id: input_boolean.system_enabled
+
+          - type: button
+            name: ✅ System aktivieren
+            icon: mdi:power
+            tap_action:
+              action: call-service
+              service: input_boolean.turn_on
+              service_data:
+                entity_id: input_boolean.system_enabled

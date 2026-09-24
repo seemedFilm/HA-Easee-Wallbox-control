@@ -1,0 +1,48 @@
+# ========================================
+# Home Assistant configuration.yaml
+# Snippet zum Einbinden des PV-Lade-Systems
+# ========================================
+#
+# ANLEITUNG:
+# Füge diese Zeilen zu deiner existierenden configuration.yaml hinzu
+# (am Ende der jeweiligen Sektionen)
+
+# ===== INPUT HELPERS =====
+# Falls du bereits input_select/input_boolean/input_number Sektionen hast,
+# füge die !include Zeile innerhalb der Sektion hinzu:
+
+input_select: !include pv_laden/input_select.yaml
+
+input_boolean: !include pv_laden/input_boolean.yaml
+
+input_number: !include pv_laden/input_number.yaml
+
+# ===== TEMPLATE SENSOREN =====
+template: !include pv_laden/template.yaml
+
+# ===== AUTOMATIONEN =====
+# Füge zu deinen Automationen hinzu:
+automation: !include_dir_merge_list automations/
+
+# ODER falls du bereits automation: nutzt:
+automation manual:
+  - !include pv_laden/automation.yaml
+
+# ODER als einzelne Zeile:
+automation: !include pv_laden/automation.yaml
+
+# ===== RECORDER =====
+# Falls bereits vorhanden, merge die entities:
+recorder:
+  include:
+    entities: !include pv_laden/recorder_entities.yaml
+
+# ===== HISTORY =====
+history:
+  include:
+    entities: !include pv_laden/history_entities.yaml
+
+# ===== LOGBOOK =====
+logbook:
+  include:
+    entities: !include pv_laden/logbook_entities.yaml

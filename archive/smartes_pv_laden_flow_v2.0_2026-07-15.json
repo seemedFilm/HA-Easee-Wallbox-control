@@ -1,0 +1,669 @@
+[
+    {
+        "id": "ceb487b98620db29",
+        "type": "tab",
+        "label": "Smartes PV-Laden v2.0",
+        "disabled": false,
+        "info": "Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Wechselrichter\n\nv2.0 Änderungen (basiert auf v1.7):\n- 4 Modi direkt aus input_select.lade_modus: automatik, laden, stoppen, überschuss\n- Automatik: PV-Regelung, Auto-Ziel-SOC ist HARD-LIMIT (nicht überbrückbar)\n- Manuell: Max Ladestrom, SOC per input_boolean.soc_override überbrückbar\n- PV-Überschuss: Nur PV, Max Ladestrom als Obergrenze, SOC per Schalter überbrückbar\n- Alle Werte live aus HA gelesen (input_number/input_boolean/input_select)\n- Action: easee.set_charger_dynamic_limit mit time_to_live:0\n- enableGlobalContextStore: true für HA State-Zugriff"
+    },
+    {
+        "id": "ac6f754875a2b27c",
+        "type": "inject",
+        "z": "ceb487b98620db29",
+        "name": "Konfiguration laden",
+        "props": [
+            {
+                "p": "config",
+                "v": "{}",
+                "vt": "json"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 150,
+        "y": 60,
+        "wires": [
+            [
+                "dcc13117bd11ded2"
+            ]
+        ]
+    },
+    {
+        "id": "dcc13117bd11ded2",
+        "type": "function",
+        "z": "ceb487b98620db29",
+        "name": "Standard-Konfiguration (Legacy-Fallback)",
+        "func": "// v2.0: Config wird jetzt live aus HA gelesen.\n// Dieser Node dient nur noch als Fallback falls HA States nicht verfügbar.\nlet config = global.get('smart_charging_config') || {};\n\nconfig = {\n    enabled: true,\n    min_charge_current: config.min_charge_current || 7,\n    max_charge_current: config.max_charge_current || 32,\n    phases: config.phases || 3,\n    min_battery_soc: config.min_battery_soc || 95,\n    car_target_soc: config.car_target_soc || 80,\n    last_update: new Date().toISOString()\n};\n\nglobal.set('smart_charging_config', config);\nmsg.payload = config;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 60,
+        "wires": [
+            [
+                "aa64aaee7bdfa3f7"
+            ]
+        ]
+    },
+    {
+        "id": "aa64aaee7bdfa3f7",
+        "type": "debug",
+        "z": "ceb487b98620db29",
+        "name": "Config geladen",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 620,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "80cb6833027c7303",
+        "type": "server-state-changed",
+        "z": "ceb487b98620db29",
+        "name": "RCT Sensoren Monitor",
+        "server": "de3d7b96.f180b8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.rct_power_storage_grid_power",
+                "sensor.rct_power_storage_battery_state_of_charge",
+                "sensor.rct_power_storage_battery_power",
+                "sensor.rct_power_storage_inverter_ac_power",
+                "sensor.rct_power_storage_consumer_power"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": false,
+        "for": "0",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "payload",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "entityState"
+            },
+            {
+                "property": "data",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "eventData"
+            }
+        ],
+        "x": 160,
+        "y": 180,
+        "wires": [
+            [
+                "cd2d911aea4382ed",
+                "8ad8e05f1264d8bd"
+            ]
+        ]
+    },
+    {
+        "id": "8ad8e05f1264d8bd",
+        "type": "function",
+        "z": "ceb487b98620db29",
+        "name": "Format Entity Debug",
+        "func": "if (msg.data && msg.data.entity_id) {\n    msg.payload = {\n        entity: msg.data.entity_id,\n        value: msg.payload,\n        unit: msg.data.new_state ? msg.data.new_state.attributes.unit_of_measurement : ''\n    };\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 180,
+        "wires": [
+            [
+                "e3c070badef83ab9"
+            ]
+        ]
+    },
+    {
+        "id": "e3c070badef83ab9",
+        "type": "debug",
+        "z": "ceb487b98620db29",
+        "name": "RCT Entity + Wert",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 640,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "08df0024e5c45776",
+        "type": "server-state-changed",
+        "z": "ceb487b98620db29",
+        "name": "Easee Sensoren Monitor",
+        "server": "de3d7b96.f180b8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.easee_home_power",
+                "sensor.easee_home_maximum_allowed_charge_current",
+                "binary_sensor.easee_home_charging"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": false,
+        "for": "0",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "payload",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "entityState"
+            },
+            {
+                "property": "data",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "eventData"
+            }
+        ],
+        "x": 160,
+        "y": 240,
+        "wires": [
+            [
+                "cd2d911aea4382ed"
+            ]
+        ]
+    },
+    {
+        "id": "6b2f30076fc13fb6",
+        "type": "server-state-changed",
+        "z": "ceb487b98620db29",
+        "name": "Zoe Sensoren Monitor",
+        "server": "de3d7b96.f180b8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.zoe_battery",
+                "sensor.zoe_plug_state",
+                "sensor.zoe_charge_state"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": false,
+        "for": "0",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "payload",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "entityState"
+            },
+            {
+                "property": "data",
+                "propertyType": "msg",
+                "value": "",
+                "valueType": "eventData"
+            }
+        ],
+        "x": 160,
+        "y": 300,
+        "wires": [
+            [
+                "cd2d911aea4382ed"
+            ]
+        ]
+    },
+    {
+        "id": "cd2d911aea4382ed",
+        "type": "function",
+        "z": "ceb487b98620db29",
+        "name": "Sammle alle Sensordaten",
+        "func": "// Hole alle aktuellen States aus Home Assistant\nconst entities = [\n    'sensor.rct_power_storage_grid_power',\n    'sensor.rct_power_storage_battery_state_of_charge',\n    'sensor.rct_power_storage_battery_power',\n    'sensor.rct_power_storage_inverter_ac_power',\n    'sensor.rct_power_storage_consumer_power',\n    'sensor.easee_home_power',\n    'sensor.easee_home_maximum_allowed_charge_current',\n    'binary_sensor.easee_home_charging',\n    'sensor.zoe_battery',\n    'sensor.zoe_plug_state',\n    'sensor.zoe_charge_state'\n];\n\n// Speichere den aktuellen State\nlet sensorData = global.get('sensor_data') || {};\n\n// Update den State für diese Entity\nif (msg.data && msg.data.entity_id) {\n    sensorData[msg.data.entity_id] = {\n        state: msg.payload,\n        attributes: msg.data.new_state ? msg.data.new_state.attributes : {},\n        last_updated: new Date().toISOString()\n    };\n}\n\nglobal.set('sensor_data', sensorData);\n\n// Prüfe ob alle wichtigen Daten vorhanden sind\nconst hasAllData = entities.every(entity => sensorData[entity]);\n\nif (hasAllData) {\n    // Erstelle strukturiertes Datenobjekt\n    msg.payload = {\n        rct: {\n            grid_power: parseFloat(sensorData['sensor.rct_power_storage_grid_power'].state) || 0,\n            battery_soc: parseFloat(sensorData['sensor.rct_power_storage_battery_state_of_charge'].state) || 0,\n            battery_power: parseFloat(sensorData['sensor.rct_power_storage_battery_power'].state) || 0,\n            inverter_power: parseFloat(sensorData['sensor.rct_power_storage_inverter_ac_power'].state) || 0,\n            consumer_power: parseFloat(sensorData['sensor.rct_power_storage_consumer_power'].state) || 0\n        },\n        easee: {\n            power: parseFloat(sensorData['sensor.easee_home_power'].state) || 0,\n            current: parseFloat(sensorData['sensor.easee_home_maximum_allowed_charge_current'].state) || 0,\n            charging: sensorData['binary_sensor.easee_home_charging'].state === 'on'\n        },\n        zoe: {\n            battery: parseFloat(sensorData['sensor.zoe_battery'].state) || 0,\n            plug_state: sensorData['sensor.zoe_plug_state'].state,\n            charge_state: sensorData['sensor.zoe_charge_state'].state\n        },\n        timestamp: new Date().toISOString()\n    };\n    \n    return msg;\n}\n\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 240,
+        "wires": [
+            [
+                "651ded89d0dbd6ba",
+                "4bfb5dbaa033cb26"
+            ]
+        ]
+    },
+    {
+        "id": "4bfb5dbaa033cb26",
+        "type": "debug",
+        "z": "ceb487b98620db29",
+        "name": "Alle Sensordaten (mit Battery SOC)",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 720,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "651ded89d0dbd6ba",
+        "type": "function",
+        "z": "ceb487b98620db29",
+        "name": "Berechne verfügbaren Überschuss",
+        "func": "const data = msg.payload;\n\n// === v2.0: Lese alle Config-Werte LIVE aus Home Assistant ===\nconst ha = global.get('homeassistant');\nif (!ha || !ha.homeAssistant || !ha.homeAssistant.states) {\n    node.warn('[v2.0] Home Assistant States nicht verfügbar!');\n    return null;\n}\nconst haStates = ha.homeAssistant.states;\n\nconst ladeModus = (haStates['input_select.lade_modus'] || {}).state || 'stoppen';\nconst socOverride = (haStates['input_boolean.soc_override'] || {}).state === 'on';\nconst maxChargeCurrent = parseFloat((haStates['input_number.max_charge_current'] || {}).state) || 32;\nconst minChargeCurrent = parseFloat((haStates['input_number.min_charge_current'] || {}).state) || 7;\nconst carTargetSoc = parseFloat((haStates['input_number.car_target_soc'] || {}).state) || 80;\nconst batteryPriority = (haStates['input_boolean.battery_priority'] || {}).state === 'on';\nconst minBatterySoc = parseFloat((haStates['input_number.min_battery_soc'] || {}).state) || 95;\nconst phases = parseFloat((haStates['input_number.phases'] || {}).state) || 3;\nconst preventBatteryDischarge = (haStates['input_boolean.prevent_battery_discharge'] || {}).state === 'on';\n\n// Config für nachfolgende Nodes mitgeben\nmsg.payload.config = {\n    lade_modus: ladeModus,\n    soc_override: socOverride,\n    max_charge_current: maxChargeCurrent,\n    min_charge_current: minChargeCurrent,\n    car_target_soc: carTargetSoc,\n    battery_priority: batteryPriority,\n    min_battery_soc: minBatterySoc,\n    phases: phases,\n    prevent_battery_discharge: preventBatteryDischarge\n};\n\n// === MODUS: STOPPEN ===\nif (ladeModus === 'stoppen') {\n    msg.payload.control = { action: 'stop', reason: 'Modus: Stoppen', mode: 'stoppen' };\n    return msg;\n}\n\n// === Prüfe ob Auto angeschlossen ===\nconst carPluggedIn = data.zoe.plug_state === 'Plugged in' || data.zoe.plug_state === 'plugged';\nif (!carPluggedIn) {\n    msg.payload.control = { action: 'stop', reason: 'Fahrzeug nicht angeschlossen', mode: 'idle' };\n    return msg;\n}\n\n// === SOC-Prüfung je nach Modus ===\n// Automatik: HARD-LIMIT - NIEMALS überbrückbar!\nif (ladeModus === 'automatik') {\n    if (data.zoe.battery >= carTargetSoc) {\n        msg.payload.control = { action: 'stop', reason: 'Auto-SOC ' + data.zoe.battery + '% >= ' + carTargetSoc + '% (HARD-LIMIT)', mode: 'automatik' };\n        return msg;\n    }\n}\n// Manuell + PV-Überschuss: SOC nur wenn Override AUS\nif (ladeModus === 'laden' || ladeModus === 'überschuss') {\n    if (!socOverride && data.zoe.battery >= carTargetSoc) {\n        msg.payload.control = { action: 'stop', reason: 'Auto-SOC ' + data.zoe.battery + '% >= ' + carTargetSoc + '% (SOC-Override: AUS)', mode: ladeModus };\n        return msg;\n    }\n}\n\n// === MODUS: MANUELL (laden) ===\n// Direkt mit max_charge_current laden, keine PV-Berechnung nötig\nif (ladeModus === 'laden') {\n    msg.payload.control = {\n        action: 'force_charge',\n        reason: 'Manuell laden mit ' + maxChargeCurrent + 'A',\n        target_current: maxChargeCurrent,\n        mode: 'laden'\n    };\n    return msg;\n}\n\n// === MODI: automatik + überschuss → PV-Überschuss berechnen ===\n\n// Batterie-Priorität prüfen\nif (batteryPriority && data.rct.battery_soc < minBatterySoc) {\n    msg.payload.control = { action: 'stop', reason: 'Batterie-Priorität: SOC ' + data.rct.battery_soc + '% < ' + minBatterySoc + '%', mode: ladeModus };\n    return msg;\n}\n\n// Berechne verfügbaren Überschuss\nlet available_surplus = 0;\n\nif (data.rct.grid_power < 0) {\n    // Es wird eingespeist\n    available_surplus = Math.abs(data.rct.grid_power);\n    // Addiere aktuelle Wallbox-Leistung falls schon am Laden\n    if (data.easee.charging && data.easee.power > 0) {\n        available_surplus += data.easee.power;\n    }\n} else {\n    // Es wird bezogen\n    if (data.easee.charging && data.easee.power > 0) {\n        available_surplus = data.easee.power - data.rct.grid_power;\n    } else {\n        available_surplus = -data.rct.grid_power;\n    }\n}\n\n// Batterie-Entladungsschutz\nif (preventBatteryDischarge && data.rct.battery_power > 0) {\n    available_surplus -= data.rct.battery_power;\n}\n\nmsg.payload.calculated = {\n    available_surplus: Math.round(available_surplus),\n    grid_power: data.rct.grid_power,\n    battery_power: data.rct.battery_power,\n    battery_soc: data.rct.battery_soc,\n    current_charging_power: data.easee.power\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 240,
+        "wires": [
+            [
+                "fff9cddb1c7e9e80"
+            ]
+        ]
+    },
+    {
+        "id": "fff9cddb1c7e9e80",
+        "type": "function",
+        "z": "ceb487b98620db29",
+        "name": "Lade-Logik & Modus-Auswahl",
+        "func": "const data = msg.payload;\nconst config = data.config;\n\n// === MANUELLES LADEN: Direkt durchreichen ===\nif (data.control && data.control.action === 'force_charge') {\n    const phases = config.phases;\n    msg.payload.control.calculated_power = Math.round(data.control.target_current * 230 * phases);\n    return [null, msg, null, null]; // Output 2: Start + Set Current\n}\n\n// === STOP bereits gesetzt (SOC-Limit, nicht angeschlossen, etc.) ===\nif (data.control && data.control.action === 'stop') {\n    return [msg, null, null, null]; // Output 1: Stop\n}\n\n// === PV-ÜBERSCHUSS LOGIK (für Modi: automatik + überschuss) ===\nconst surplus = data.calculated.available_surplus;\nconst isCharging = data.easee.charging;\nconst phases = config.phases;\nconst minCurrent = config.min_charge_current;\nconst maxCurrent = config.max_charge_current;\nconst mode = config.lade_modus;\n\n// Berechne Strom aus Überschuss\nfunction calculateCurrent(power_watts) {\n    if (phases === 3) {\n        return power_watts / (230 * phases);\n    }\n    return power_watts / 230;\n}\n\nfunction calculatePower(current_ampere) {\n    if (phases === 3) {\n        return current_ampere * 230 * phases;\n    }\n    return current_ampere * 230;\n}\n\nlet targetCurrent = Math.round(calculateCurrent(surplus));\ntargetCurrent = Math.max(minCurrent, Math.min(maxCurrent, targetCurrent));\n\nlet action = 'hold';\nlet reason = '';\n\n// Genug Überschuss? Mindestens 3600W (3,6kW)\nconst minStartPower = 3600;\n\nif (surplus >= minStartPower) {\n    if (isCharging) {\n        action = 'charge';\n        reason = mode + ': ' + Math.round(surplus) + 'W -> ' + targetCurrent + 'A';\n    } else {\n        action = 'start';\n        reason = mode + ' Start: ' + Math.round(surplus) + 'W -> ' + targetCurrent + 'A';\n    }\n} else {\n    if (isCharging) {\n        action = 'stop';\n        reason = mode + ': Überschuss zu gering (' + Math.round(surplus) + 'W < ' + Math.round(minStartPower) + 'W)';\n    } else {\n        action = 'hold';\n        reason = mode + ': Warte auf Überschuss (' + Math.round(surplus) + 'W < ' + Math.round(minStartPower) + 'W)';\n    }\n}\n\n// === API-Throttling (aus v1.7 beibehalten) ===\nconst now = Date.now();\nconst lastSetCurrent = flow.get('last_api_current') || 0;\nconst lastApiCall = flow.get('last_api_timestamp') || 0;\nconst timeSinceLastCall = (now - lastApiCall) / 1000;\n\n// Kein API-Call wenn Strom unverändert\nif (action === 'charge' && targetCurrent === lastSetCurrent) {\n    action = 'hold';\n}\n// Min. 30s zwischen API-Calls\nif (action === 'charge' && timeSinceLastCall < 30 && targetCurrent !== lastSetCurrent) {\n    action = 'hold';\n}\n// Nur signifikante Änderungen (>=1A)\nif (action === 'charge' && Math.abs(targetCurrent - lastSetCurrent) < 1) {\n    targetCurrent = lastSetCurrent;\n    action = 'hold';\n}\n\n// Tracking für nächsten Call\nif (action === 'charge' || action === 'start') {\n    flow.set('last_api_current', targetCurrent);\n    flow.set('last_api_timestamp', now);\n}\n\n// Control-Message\nmsg.payload.control = {\n    action: action,\n    target_current: targetCurrent,\n    mode: mode,\n    reason: reason,\n    calculated_power: Math.round(calculatePower(targetCurrent))\n};\n\n// Debug-Logging\nif (action !== 'hold') {\n    node.warn('═══ PV-Laden v2.0 ═══');\n    node.warn('[MODE] ' + mode + ' | SOC-Override: ' + (config.soc_override ? 'AN' : 'AUS'));\n    node.warn('[PV] Überschuss: ' + Math.round(surplus) + 'W');\n    node.warn('[TGT] ' + targetCurrent + 'A (' + Math.round(calculatePower(targetCurrent)) + 'W)');\n    node.warn('[ACT] ' + action + ' | ' + reason);\n    node.warn('═════════════════════');\n}\n\n// Routing\nif (action === 'stop') {\n    return [msg, null, null, null]; // Output 1: Stop\n} else if (action === 'start') {\n    return [null, msg, null, null]; // Output 2: Start\n} else if (action === 'charge') {\n    return [null, null, msg, null]; // Output 3: Adjust Current\n} else {\n    return [null, null, null, msg]; // Output 4: Hold/Idle\n}",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 200,
+        "y": 600,
+        "wires": [
+            [
+                "2c67484ae2b0c9b0"
+            ],
+            [
+                "5e8399f9b0faadc2"
+            ],
+            [
+                "rbe_dynamic_limit_v17"
+            ],
+            [
+                "c7ee674b46002b80"
+            ]
+        ],
+        "outputLabels": [
+            "Stop",
+            "Start",
+            "Adjust Current",
+            "Hold/Idle"
+        ]
+    },
+    {
+        "id": "2c67484ae2b0c9b0",
+        "type": "rbe",
+        "z": "ceb487b98620db29",
+        "name": "Duplizierte Stop-Messages filtern",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": false,
+        "property": "payload.control.reason",
+        "topi": "topic",
+        "x": 490,
+        "y": 520,
+        "wires": [
+            [
+                "231c6b5df5a196fb"
+            ]
+        ]
+    },
+    {
+        "id": "231c6b5df5a196fb",
+        "type": "api-call-service",
+        "z": "ceb487b98620db29",
+        "name": "Wallbox pausieren (easee.action_command)",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "easee.action_command",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"device_id\":\"b5b0134f3c9b9d7da1fe77ff580320f2\",\"action_command\":\"pause\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "easee",
+        "service": "action_command",
+        "x": 790,
+        "y": 520,
+        "wires": [
+            [
+                "14cc4f493f32d388"
+            ]
+        ]
+    },
+    {
+        "id": "5e8399f9b0faadc2",
+        "type": "api-call-service",
+        "z": "ceb487b98620db29",
+        "name": "Wallbox fortsetzen (easee.action_command)",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "easee.action_command",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"device_id\":\"b5b0134f3c9b9d7da1fe77ff580320f2\",\"action_command\":\"resume\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "easee",
+        "service": "action_command",
+        "x": 530,
+        "y": 580,
+        "wires": [
+            [
+                "rbe_dynamic_limit_v17"
+            ]
+        ]
+    },
+    {
+        "id": "e03e581d6d816cea",
+        "type": "api-call-service",
+        "z": "ceb487b98620db29",
+        "name": "Dynamic Limit setzen (easee.set_charger_dynamic_limit)",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "easee.set_charger_dynamic_limit",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"device_id\":\"b5b0134f3c9b9d7da1fe77ff580320f2\",\"current\":$number(payload.control.target_current),\"time_to_live\":0}",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "easee",
+        "service": "set_charger_dynamic_limit",
+        "x": 880,
+        "y": 620,
+        "wires": [
+            [
+                "14cc4f493f32d388"
+            ]
+        ]
+    },
+    {
+        "id": "14cc4f493f32d388",
+        "type": "function",
+        "z": "ceb487b98620db29",
+        "name": "Logging & Status",
+        "func": "const control = msg.payload.control;\nconst data = msg.payload;\n\n// Erstelle Log-Eintrag\nconst logEntry = {\n    timestamp: new Date().toISOString(),\n    action: control.action,\n    mode: control.mode || 'unknown',\n    reason: control.reason,\n    target_current: control.target_current || 0,\n    calculated_power: control.calculated_power || 0,\n    available_surplus: data.calculated ? data.calculated.available_surplus : 0,\n    battery_soc: data.rct ? data.rct.battery_soc : 0,\n    car_soc: data.zoe ? data.zoe.battery : 0\n};\n\n// Speichere letzte 100 Log-Einträge\nlet logs = global.get('charging_logs') || [];\nlogs.unshift(logEntry);\nif (logs.length > 100) logs = logs.slice(0, 100);\nglobal.set('charging_logs', logs);\n\n// Update Status für Dashboard\nconst status = {\n    mode: control.mode || 'unknown',\n    action: control.action,\n    current_charging: data.easee ? data.easee.charging : false,\n    target_current: control.target_current,\n    available_surplus: data.calculated ? data.calculated.available_surplus : 0,\n    battery_soc: data.rct ? data.rct.battery_soc : 0,\n    car_soc: data.zoe ? data.zoe.battery : 0,\n    last_update: new Date().toISOString(),\n    reason: control.reason\n};\n\nglobal.set('charging_status', status);\n\nmsg.payload = logEntry;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1150,
+        "y": 580,
+        "wires": [
+            [
+                "69fbb68cccaf7ccf"
+            ]
+        ]
+    },
+    {
+        "id": "69fbb68cccaf7ccf",
+        "type": "debug",
+        "z": "ceb487b98620db29",
+        "name": "Aktion ausgeführt",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1380,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "c7ee674b46002b80",
+        "type": "debug",
+        "z": "ceb487b98620db29",
+        "name": "Status: Idle/Hold",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload.control.reason",
+        "targetType": "msg",
+        "statusVal": "payload.control.reason",
+        "statusType": "msg",
+        "x": 480,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "21d92be396f1e3f1",
+        "type": "inject",
+        "z": "ceb487b98620db29",
+        "name": "Zyklischer Update (alle 30s)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 190,
+        "y": 380,
+        "wires": [
+            [
+                "9b33a04a9099f9f9"
+            ]
+        ]
+    },
+    {
+        "id": "9b33a04a9099f9f9",
+        "type": "change",
+        "z": "ceb487b98620db29",
+        "name": "Trigger Sensor Collection",
+        "rules": [
+            {
+                "t": "set",
+                "p": "trigger",
+                "pt": "msg",
+                "to": "manual",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 460,
+        "y": 380,
+        "wires": [
+            [
+                "cd2d911aea4382ed"
+            ]
+        ]
+    },
+    {
+        "id": "f005a36caededa6c",
+        "type": "comment",
+        "z": "ceb487b98620db29",
+        "name": "KONFIGURATION - Wird live aus HA gelesen (enableGlobalContextStore)",
+        "info": "v2.0: Alle Werte werden direkt aus Home Assistant States gelesen.\n\nBenötigte HA Helpers:\n- input_select.lade_modus (automatik/laden/stoppen/überschuss)\n- input_boolean.soc_override (SOC-Limit überbrücken)\n- input_number.max_charge_current\n- input_number.min_charge_current\n- input_number.car_target_soc\n- input_number.min_battery_soc\n- input_number.phases\n- input_boolean.battery_priority\n- input_boolean.prevent_battery_discharge",
+        "x": 310,
+        "y": 20,
+        "wires": []
+    },
+    {
+        "id": "9682c8cbe9084678",
+        "type": "comment",
+        "z": "ceb487b98620db29",
+        "name": "SENSOR-MONITORING - Home Assistant Entities überwachen",
+        "info": "",
+        "x": 260,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "74d84d6d264ab16c",
+        "type": "comment",
+        "z": "ceb487b98620db29",
+        "name": "HAUPT-LOGIK v2.0 - Berechnung und Steuerung",
+        "info": "Modi:\n- automatik: PV-Überschuss, Auto-Ziel-SOC = HARD-LIMIT\n- laden: Max Ladestrom, SOC per soc_override überbrückbar\n- stoppen: Wallbox pausiert\n- überschuss: Nur PV, Max Ladestrom als Obergrenze, SOC per soc_override überbrückbar",
+        "x": 250,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "d6afcef2dc670bbe",
+        "type": "comment",
+        "z": "ceb487b98620db29",
+        "name": "AKTIONEN - easee.set_charger_dynamic_limit + pause/resume",
+        "info": "Device-ID: b5b0134f3c9b9d7da1fe77ff580320f2\n\neasee.set_charger_dynamic_limit:\n- current: Ampere-Wert\n- time_to_live: 0 (kein Timeout)\n\neasee.action_command:\n- pause: Wallbox anhalten\n- resume: Wallbox fortsetzen",
+        "x": 700,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "4ad1464c9015746c",
+        "type": "comment",
+        "z": "ceb487b98620db29",
+        "name": "EASEE STEUERUNG v2.0 - Device-ID b5b0134f3c9b9d7da1fe77ff580320f2",
+        "info": "Easee Steuerung:\n\n1. easee.action_command:\n   - action_command: \"pause\" / \"resume\"\n   - Device-ID: b5b0134f3c9b9d7da1fe77ff580320f2\n\n2. easee.set_charger_dynamic_limit:\n   - current: Zielstrom in Ampere\n   - time_to_live: 0\n   - Device-ID: b5b0134f3c9b9d7da1fe77ff580320f2\n\n3. 'The lowest limit wins'\n4. RBE-Filter verhindert redundante API-Calls",
+        "x": 760,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "de3d7b96.f180b8",
+        "type": "server",
+        "name": "Home Assistant",
+        "addon": true,
+        "rejectUnauthorizedCerts": true,
+        "ha_boolean": "y",
+        "connectionDelay": false,
+        "cacheJson": false,
+        "heartbeat": false,
+        "heartbeatInterval": "",
+        "statusSeparator": "",
+        "enableGlobalContextStore": true
+    },
+    {
+        "id": "rbe_dynamic_limit_v17",
+        "type": "rbe",
+        "z": "ceb487b98620db29",
+        "name": "Filter identische Stromwerte",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": false,
+        "property": "payload.control.target_current",
+        "topi": "topic",
+        "x": 700,
+        "y": 600,
+        "wires": [
+            [
+                "e03e581d6d816cea"
+            ]
+        ]
+    }
+]

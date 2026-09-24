@@ -1,0 +1,731 @@
+[
+    {
+        "id": "808371fe283a83af",
+        "type": "tab",
+        "label": "Smartes PV-Laden v2.3 (2026-08-11)",
+        "disabled": false,
+        "info": "Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Wechselrichter\n\nv2.3 Änderungen (basiert auf v2.2):\n- NEU: Eigenständiger Modus \"günstigster_strom\" (rein preisgetrieben, ohne PV-Bezug)\n  - Lädt mit max_charge_current, sobald aktueller Preis <= Tagestief + 15%\n  - Schwelle für Günstigstrom-Erkennung von 20% auf 15% gesenkt (gilt für alle Preis-Logik)\n- GEÄNDERT: Automatik lädt jetzt PV-Überschuss zuerst; reicht der Überschuss nicht,\n  fällt sie (wenn tibber_enabled=on) automatisch auf Günstigstrom-Laden zurück\n- GEÄNDERT: Auto-Ziel-SOC (80%) ist in ALLEN Modi identisch per input_boolean.soc_override\n  überbrückbar - Automatik hat kein Hard-Limit mehr\n- NEU: Wolken-Überbrückung für automatik + überschuss - bei kurzzeitig zu geringem\n  Überschuss wird bis zu input_number.bridge_max_minutes (Standard 10 min) mit\n  min_charge_current weitergeladen statt sofort zu stoppen\n- Modus \"laden\": unverändert (fester Ladestrom, SOC per soc_override überbrückbar)\n- Modus \"überschuss\": unverändert in der Berechnung (reiner PV-Überschuss, kein Preis-Fallback)\n\nv2.1 Änderungen (basiert auf v2.0):\n- RCT Batterie-Lock via rctpower_writesupport Integration\n  - Wallbox Start → switch.rct_lock_battery ON (Batterie wird eingefroren)\n  - Wallbox Stop → switch.rct_lock_battery OFF (Batterie arbeitet normal)\n  - Verhindert physisch, dass Hausbatterie für Wallbox entladen wird\n- Voraussetzungen:\n  - rctpower_writesupport Integration (github.com/do-gooder/rctpower_writesupport)\n  - Tibber Integration mit Pulse (sensor.sectorchan_electricity_price, Attribut min_price)\n\nv2.0 Features:\n- 5 Modi direkt aus input_select.lade_modus: automatik, laden, stoppen, überschuss, günstigster_strom\n- Alle Werte live aus HA gelesen (input_number/input_boolean/input_select)\n- Action: easee.set_charger_dynamic_limit mit time_to_live:0\n- enableGlobalContextStore: true für HA State-Zugriff"
+    },
+    {
+        "id": "fbd6b5f0b999ad28",
+        "type": "inject",
+        "z": "808371fe283a83af",
+        "name": "Konfiguration laden",
+        "props": [
+            {
+                "p": "config",
+                "v": "{}",
+                "vt": "json"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 150,
+        "y": 60,
+        "wires": [
+            [
+                "9c01446298031bce"
+            ]
+        ]
+    },
+    {
+        "id": "9c01446298031bce",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Standard-Konfiguration (Legacy-Fallback)",
+        "func": "// v2.0: Config wird jetzt live aus HA gelesen.\n// Dieser Node dient nur noch als Fallback falls HA States nicht verfügbar.\nlet config = global.get('smart_charging_config') || {};\n\nconfig = {\n    enabled: true,\n    min_charge_current: config.min_charge_current || 7,\n    max_charge_current: config.max_charge_current || 32,\n    phases: config.phases || 3,\n    min_battery_soc: config.min_battery_soc || 95,\n    car_target_soc: config.car_target_soc || 80,\n    last_update: new Date().toISOString()\n};\n\nglobal.set('smart_charging_config', config);\nmsg.payload = config;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 60,
+        "wires": [
+            [
+                "5864ca9174774876"
+            ]
+        ]
+    },
+    {
+        "id": "5864ca9174774876",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Config geladen",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 620,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "330cdbe5758bc59d",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Format Entity Debug",
+        "func": "if (msg.data && msg.data.entity_id) {\n    msg.payload = {\n        entity: msg.data.entity_id,\n        value: msg.payload,\n        unit: msg.data.new_state ? msg.data.new_state.attributes.unit_of_measurement : ''\n    };\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 180,
+        "wires": [
+            [
+                "990951915854a849"
+            ]
+        ]
+    },
+    {
+        "id": "990951915854a849",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "RCT Entity + Wert",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 670,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "a60ca9455e3d3316",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Sammle alle Sensordaten",
+        "func": "// v2.3: Lese alle Sensordaten direkt aus Home Assistant Global Context\nconst ha = global.get('homeassistant');\nif (!ha || !ha.homeAssistant || !ha.homeAssistant.states) {\n    node.warn('[v2.3] Home Assistant States nicht verfügbar!');\n    return null;\n}\nconst haStates = ha.homeAssistant.states;\n\n// Prüfe ob alle wichtigen Entities vorhanden sind\nconst required = [\n    'sensor.rct_power_storage_grid_power',\n    'sensor.rct_power_storage_battery_state_of_charge',\n    'sensor.rct_power_storage_battery_power',\n    'sensor.easee_home_power',\n    'sensor.easee_home_status',\n    'sensor.zoe_battery',\n    'sensor.zoe_plug_state'\n];\n\nconst missing = required.filter(e => !haStates[e] || haStates[e].state === 'unavailable');\nif (missing.length > 0) {\n    node.warn('[v2.3] Fehlende Entities: ' + missing.join(', '));\n    return null;\n}\n\n// Erstelle strukturiertes Datenobjekt\nmsg.payload = {\n    rct: {\n        grid_power: parseFloat(haStates['sensor.rct_power_storage_grid_power'].state) || 0,\n        battery_soc: parseFloat(haStates['sensor.rct_power_storage_battery_state_of_charge'].state) || 0,\n        battery_power: parseFloat(haStates['sensor.rct_power_storage_battery_power'].state) || 0,\n        inverter_power: parseFloat((haStates['sensor.rct_power_storage_inverter_ac_power'] || {}).state) || 0,\n        consumer_power: parseFloat((haStates['sensor.rct_power_storage_consumer_power'] || {}).state) || 0\n    },\n    easee: {\n        power: parseFloat(haStates['sensor.easee_home_power'].state) || 0,\n        current: parseFloat((haStates['sensor.easee_home_maximum_allowed_charge_current'] || {}).state) || 0,\n        charging: haStates['sensor.easee_home_status'].state === 'charging'\n    },\n    zoe: {\n        battery: parseFloat(haStates['sensor.zoe_battery'].state) || 0,\n        plug_state: haStates['sensor.zoe_plug_state'].state,\n        charge_state: (haStates['sensor.zoe_charge_state'] || {}).state || 'unknown'\n    },\n    timestamp: Date.now()\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 240,
+        "wires": [
+            [
+                "3685e60ba8e8883f",
+                "17958a2cae7f77e9"
+            ]
+        ]
+    },
+    {
+        "id": "17958a2cae7f77e9",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Alle Sensordaten (mit Battery SOC)",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 740,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "3685e60ba8e8883f",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Berechne verfügbaren Überschuss",
+        "func": "const data = msg.payload;\n\n// === v2.3: Lese alle Config-Werte LIVE aus Home Assistant ===\nconst ha = global.get('homeassistant');\nif (!ha || !ha.homeAssistant || !ha.homeAssistant.states) {\n    node.warn('[v2.3] Home Assistant States nicht verfügbar!');\n    return null;\n}\nconst haStates = ha.homeAssistant.states;\n\nconst ladeModus = (haStates['input_select.lade_modus'] || {}).state || 'stoppen';\nconst socOverride = (haStates['input_boolean.soc_override'] || {}).state === 'on';\nconst maxChargeCurrent = parseFloat((haStates['input_number.max_charge_current'] || {}).state) || 32;\nconst minChargeCurrent = parseFloat((haStates['input_number.min_charge_current'] || {}).state) || 7;\nconst carTargetSoc = parseFloat((haStates['input_number.car_target_soc'] || {}).state) || 80;\nconst batteryPriority = (haStates['input_boolean.battery_priority'] || {}).state === 'on';\nconst minBatterySoc = parseFloat((haStates['input_number.min_battery_soc'] || {}).state) || 95;\nconst phases = parseFloat((haStates['input_number.phases'] || {}).state) || 3;\nconst preventBatteryDischarge = (haStates['input_boolean.prevent_battery_discharge'] || {}).state === 'on';\nconst tibberEnabled = (haStates['input_boolean.tibber_enabled'] || {}).state === 'on';\nconst bridgeMaxMinutes = parseFloat((haStates['input_number.bridge_max_minutes'] || {}).state) || 10;\n\n// === v2.3: Günstigster-Strom-Erkennung - Tagestief + 15% Toleranz ===\n// Läuft IMMER (unabhängig von tibber_enabled), damit der eigenständige\n// Modus \"günstigster_strom\" jederzeit funktioniert. tibber_enabled steuert\n// nur noch, ob Automatik bei PV-Mangel zusätzlich auf Günstigstrom zurückfällt.\nconst priceEntity = haStates['sensor.sectorchan_electricity_price'] || {};\nconst currentPrice = parseFloat(priceEntity.state) || 0;\nconst minPrice = parseFloat((priceEntity.attributes || {}).min_price) || 0;\nconst priceThreshold = minPrice * 1.15;\nconst isCheapestNow = currentPrice > 0 && currentPrice <= priceThreshold;\n\n// Config für nachfolgende Nodes mitgeben\nmsg.payload.config = {\n    lade_modus: ladeModus,\n    soc_override: socOverride,\n    max_charge_current: maxChargeCurrent,\n    min_charge_current: minChargeCurrent,\n    car_target_soc: carTargetSoc,\n    battery_priority: batteryPriority,\n    min_battery_soc: minBatterySoc,\n    phases: phases,\n    prevent_battery_discharge: preventBatteryDischarge,\n    tibber_enabled: tibberEnabled,\n    tibber_current_price: currentPrice,\n    tibber_min_price: minPrice,\n    tibber_threshold: priceThreshold,\n    is_cheapest_now: isCheapestNow,\n    bridge_max_minutes: bridgeMaxMinutes\n};\n\n// === MODUS: STOPPEN ===\nif (ladeModus === 'stoppen') {\n    msg.payload.control = { action: 'stop', reason: 'Modus: Stoppen', mode: 'stoppen' };\n    return msg;\n}\n\n// === Prüfe ob Auto angeschlossen ===\nconst carPluggedIn = data.zoe.plug_state === 'Plugged in' || data.zoe.plug_state === 'plugged';\nif (!carPluggedIn) {\n    msg.payload.control = { action: 'stop', reason: 'Fahrzeug nicht angeschlossen', mode: 'idle' };\n    return msg;\n}\n\n// === v2.3: SOC-Prüfung EINHEITLICH für alle Modi - per soc_override überbrückbar ===\n// Automatik verlor damit ihr bisheriges Hard-Limit und verhält sich wie\n// laden/überschuss/günstigster_strom: 80%-Ziel, aber mit dem Schalter übersteuerbar.\nif (!socOverride && data.zoe.battery >= carTargetSoc) {\n    msg.payload.control = { action: 'stop', reason: 'Auto-SOC ' + data.zoe.battery + '% >= ' + carTargetSoc + '% (SOC-Override: AUS)', mode: ladeModus };\n    return msg;\n}\n\n// === MODUS: MANUELL (laden) ===\n// Direkt mit max_charge_current laden, keine PV-Berechnung nötig\nif (ladeModus === 'laden') {\n    msg.payload.control = {\n        action: 'force_charge',\n        reason: 'Manuell laden mit ' + maxChargeCurrent + 'A',\n        target_current: maxChargeCurrent,\n        mode: 'laden'\n    };\n    return msg;\n}\n\n// === MODI: automatik, überschuss, günstigster_strom → weiter zur Entscheidungslogik ===\n\n// Batterie-Priorität prüfen (gilt nicht für \"laden\", das oben bereits behandelt wurde)\nif (batteryPriority && data.rct.battery_soc < minBatterySoc) {\n    msg.payload.control = { action: 'stop', reason: 'Batterie-Priorität: SOC ' + data.rct.battery_soc + '% < ' + minBatterySoc + '%', mode: ladeModus };\n    return msg;\n}\n\n// Berechne verfügbaren PV-Überschuss\n// (für günstigster_strom mitgeliefert, aber dort für die Ladeentscheidung ungenutzt)\nlet available_surplus = 0;\n\nif (data.rct.grid_power < 0) {\n    // Es wird eingespeist\n    available_surplus = Math.abs(data.rct.grid_power);\n    // Addiere aktuelle Wallbox-Leistung falls schon am Laden\n    if (data.easee.charging && data.easee.power > 0) {\n        available_surplus += data.easee.power;\n    }\n} else {\n    // Es wird bezogen\n    if (data.easee.charging && data.easee.power > 0) {\n        available_surplus = data.easee.power - data.rct.grid_power;\n    } else {\n        available_surplus = -data.rct.grid_power;\n    }\n}\n\n// Batterie-Entladungsschutz\nif (preventBatteryDischarge && data.rct.battery_power > 0) {\n    available_surplus -= data.rct.battery_power;\n}\n\nmsg.payload.calculated = {\n    available_surplus: Math.round(available_surplus),\n    grid_power: data.rct.grid_power,\n    battery_power: data.rct.battery_power,\n    battery_soc: data.rct.battery_soc,\n    current_charging_power: data.easee.power\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 260,
+        "wires": [
+            [
+                "e735b363ebf83d87"
+            ]
+        ]
+    },
+    {
+        "id": "e735b363ebf83d87",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Lade-Logik & Modus-Auswahl",
+        "func": "const data = msg.payload;\nconst config = data.config;\n\n// === MANUELLES LADEN: Direkt durchreichen ===\nif (data.control && data.control.action === 'force_charge') {\n    const phases = config.phases;\n    msg.payload.control.calculated_power = Math.round(data.control.target_current * 230 * phases);\n    flow.set('bridge_active', false);\n    flow.set('bridge_start_ts', null);\n    return [null, msg, null, null]; // Output 2: Start + Set Current\n}\n\n// === STOP bereits gesetzt (SOC-Limit, nicht angeschlossen, Batterie-Priorität, etc.) ===\nif (data.control && data.control.action === 'stop') {\n    flow.set('bridge_active', false);\n    flow.set('bridge_start_ts', null);\n    return [msg, null, null, null]; // Output 1: Stop\n}\n\n// === PV-/PREIS-LOGIK (für Modi: automatik, überschuss, günstigster_strom) ===\nconst surplus = data.calculated.available_surplus;\nconst isCharging = data.easee.charging;\nconst phases = config.phases;\nconst minCurrent = config.min_charge_current;\nconst maxCurrent = config.max_charge_current;\nconst mode = config.lade_modus;\nconst isCheapestNow = config.is_cheapest_now;\nconst bridgeMaxMinutes = config.bridge_max_minutes;\n\nfunction calculateCurrent(power_watts) {\n    if (phases === 3) {\n        return power_watts / (230 * phases);\n    }\n    return power_watts / 230;\n}\n\nfunction calculatePower(current_ampere) {\n    if (phases === 3) {\n        return current_ampere * 230 * phases;\n    }\n    return current_ampere * 230;\n}\n\nfunction clearBridge() {\n    flow.set('bridge_active', false);\n    flow.set('bridge_start_ts', null);\n}\n\nlet targetCurrent = Math.round(calculateCurrent(surplus));\ntargetCurrent = Math.max(minCurrent, Math.min(maxCurrent, targetCurrent));\n\nlet action = 'hold';\nlet reason = '';\nlet tibberBoost = false;\n\nif (mode === 'günstigster_strom') {\n    // === MODUS: GÜNSTIGSTER STROM - rein preisgetrieben, PV-Überschuss irrelevant ===\n    clearBridge();\n    const priceCt = (config.tibber_current_price * 100).toFixed(1);\n    const thresholdCt = (config.tibber_threshold * 100).toFixed(1);\n    if (isCheapestNow) {\n        targetCurrent = maxCurrent;\n        if (isCharging) {\n            action = 'charge';\n            reason = 'GÜNSTIGSTER STROM: ' + priceCt + ' ct <= Tagestief+15% (' + thresholdCt + ' ct) -> ' + targetCurrent + 'A';\n        } else {\n            action = 'start';\n            reason = 'GÜNSTIGSTER STROM Start: ' + priceCt + ' ct <= ' + thresholdCt + ' ct -> ' + targetCurrent + 'A';\n        }\n    } else {\n        if (isCharging) {\n            action = 'stop';\n            reason = 'GÜNSTIGSTER STROM: Preis ' + priceCt + ' ct > Schwelle ' + thresholdCt + ' ct - nicht mehr die günstigste Phase';\n        } else {\n            action = 'hold';\n            reason = 'GÜNSTIGSTER STROM: Warte auf Tagestief (' + priceCt + ' ct > ' + thresholdCt + ' ct)';\n        }\n    }\n} else {\n    // === MODI: AUTOMATIK + ÜBERSCHUSS ===\n    // automatik: PV zuerst, bei PV-Mangel optional Preis-Fallback (tibber_enabled)\n    // überschuss: ausschließlich PV, kein Preis-Fallback\n    const minStartPower = 3600;\n\n    if (surplus >= minStartPower) {\n        clearBridge();\n        if (isCharging) {\n            action = 'charge';\n            reason = mode + ': ' + Math.round(surplus) + 'W -> ' + targetCurrent + 'A';\n        } else {\n            action = 'start';\n            reason = mode + ' Start: ' + Math.round(surplus) + 'W -> ' + targetCurrent + 'A';\n        }\n    } else if (mode === 'automatik' && config.tibber_enabled && isCheapestNow) {\n        // PV reicht nicht -> Fallback auf günstigsten Strompreis (nur im Automatik-Modus)\n        clearBridge();\n        targetCurrent = maxCurrent;\n        tibberBoost = true;\n        const priceCt = (config.tibber_current_price * 100).toFixed(1);\n        if (isCharging) {\n            action = 'charge';\n            reason = 'AUTOMATIK-FALLBACK Günstigstrom: PV ' + Math.round(surplus) + 'W unzureichend, Preis ' + priceCt + ' ct günstig -> ' + targetCurrent + 'A';\n        } else {\n            action = 'start';\n            reason = 'AUTOMATIK-FALLBACK Günstigstrom Start: Preis ' + priceCt + ' ct günstig -> ' + targetCurrent + 'A';\n        }\n    } else if (isCharging) {\n        // Zu wenig Überschuss und kein Preis-Fallback -> Wolken-Überbrückung versuchen\n        // (verhindert Start/Stopp-Geflacker bei kurzen Einbrüchen, z.B. Wolken)\n        const bridgeNow = Date.now();\n        let bridgeStart = flow.get('bridge_start_ts');\n        if (!bridgeStart) {\n            bridgeStart = bridgeNow;\n            flow.set('bridge_active', true);\n            flow.set('bridge_start_ts', bridgeNow);\n        }\n        const elapsedMin = (bridgeNow - bridgeStart) / 60000;\n        if (elapsedMin < bridgeMaxMinutes) {\n            action = 'charge';\n            targetCurrent = minCurrent;\n            reason = mode + ': ÜBERBRÜCKUNG (' + elapsedMin.toFixed(1) + '/' + bridgeMaxMinutes + ' min) bei ' + Math.round(surplus) + 'W -> ' + targetCurrent + 'A';\n        } else {\n            action = 'stop';\n            reason = mode + ': Überbrückung abgelaufen (' + bridgeMaxMinutes + ' min) - Überschuss weiter zu gering (' + Math.round(surplus) + 'W)';\n            clearBridge();\n        }\n    } else {\n        action = 'hold';\n        reason = mode + ': Warte auf Überschuss (' + Math.round(surplus) + 'W < ' + Math.round(minStartPower) + 'W)';\n        clearBridge();\n    }\n}\n\n// === API-Throttling (aus v1.7 beibehalten) ===\nconst now = Date.now();\nconst lastSetCurrent = flow.get('last_api_current') || 0;\nconst lastApiCall = flow.get('last_api_timestamp') || 0;\nconst timeSinceLastCall = (now - lastApiCall) / 1000;\n\n// Kein API-Call wenn Strom unverändert\nif (action === 'charge' && targetCurrent === lastSetCurrent) {\n    action = 'hold';\n}\n// Min. 30s zwischen API-Calls\nif (action === 'charge' && timeSinceLastCall < 30 && targetCurrent !== lastSetCurrent) {\n    action = 'hold';\n}\n// Nur signifikante Änderungen (>=1A)\nif (action === 'charge' && Math.abs(targetCurrent - lastSetCurrent) < 1) {\n    targetCurrent = lastSetCurrent;\n    action = 'hold';\n}\n\n// Tracking für nächsten Call\nif (action === 'charge' || action === 'start') {\n    flow.set('last_api_current', targetCurrent);\n    flow.set('last_api_timestamp', now);\n}\n\n// Control-Message\nmsg.payload.control = {\n    action: action,\n    target_current: targetCurrent,\n    mode: mode,\n    reason: reason,\n    calculated_power: Math.round(calculatePower(targetCurrent)),\n    tibber_boost: tibberBoost\n};\n\n// Debug-Logging\nif (action !== 'hold') {\n    node.warn('═══ PV-Laden v2.3 ═══');\n    node.warn('[MODE] ' + mode);\n    if (tibberBoost) {\n        node.warn('[FALLBACK] Automatik-Günstigstrom-Boost aktiv: ' + (config.tibber_current_price * 100).toFixed(1) + ' ct/kWh (Schwelle: ' + (config.tibber_threshold * 100).toFixed(1) + ' ct)');\n    }\n    node.warn('[PV] Überschuss: ' + Math.round(surplus) + 'W');\n    node.warn('[TGT] ' + targetCurrent + 'A (' + Math.round(calculatePower(targetCurrent)) + 'W)');\n    node.warn('[ACT] ' + action + ' | ' + reason);\n    node.warn('═════════════════════');\n}\n\n// Routing\nif (action === 'stop') {\n    return [msg, null, null, null]; // Output 1: Stop\n} else if (action === 'start') {\n    return [null, msg, null, null]; // Output 2: Start\n} else if (action === 'charge') {\n    return [null, null, msg, null]; // Output 3: Adjust Current\n} else {\n    return [null, null, null, msg]; // Output 4: Hold/Idle\n}",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 340,
+        "y": 840,
+        "wires": [
+            [
+                "ac4880fbff1c877a",
+                "3f390fbaadee6a19"
+            ],
+            [
+                "a2f992de98102a94",
+                "3f390fbaadee6a19"
+            ],
+            [
+                "7a2f02c3c4dc237c",
+                "3f390fbaadee6a19"
+            ],
+            [
+                "2bd9cb4cf5241bba"
+            ]
+        ],
+        "outputLabels": [
+            "Stop",
+            "Start",
+            "Adjust Current",
+            "Hold/Idle"
+        ]
+    },
+    {
+        "id": "ac4880fbff1c877a",
+        "type": "rbe",
+        "z": "808371fe283a83af",
+        "name": "Duplizierte Stop-Messages filtern",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": false,
+        "property": "payload.control.reason",
+        "topi": "topic",
+        "x": 690,
+        "y": 720,
+        "wires": [
+            [
+                "74b608b52d52f999"
+            ]
+        ]
+    },
+    {
+        "id": "74b608b52d52f999",
+        "type": "api-call-service",
+        "z": "808371fe283a83af",
+        "name": "Wallbox pausieren ",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": true,
+        "action": "easee.action_command",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"device_id\":\"b5b0134f3c9b9d7da1fe77ff580320f2\",\"action_command\":\"pause\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "easee",
+        "service": "action_command",
+        "x": 1100,
+        "y": 720,
+        "wires": [
+            [
+                "c9369011539a5cfb",
+                "a0a2e033b8b8d4f4"
+            ]
+        ]
+    },
+    {
+        "id": "a2f992de98102a94",
+        "type": "api-call-service",
+        "z": "808371fe283a83af",
+        "name": "Wallbox fortsetzen ",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "easee.action_command",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"device_id\":\"b5b0134f3c9b9d7da1fe77ff580320f2\",\"action_command\":\"resume\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "easee",
+        "service": "action_command",
+        "x": 660,
+        "y": 780,
+        "wires": [
+            [
+                "7a2f02c3c4dc237c",
+                "69f361661e5c7a12"
+            ]
+        ]
+    },
+    {
+        "id": "95e9eae5a9c4473d",
+        "type": "api-call-service",
+        "z": "808371fe283a83af",
+        "name": "Dynamic Limit setzen ",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "easee.set_charger_dynamic_limit",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"device_id\":\"b5b0134f3c9b9d7da1fe77ff580320f2\",\"current\":$number(payload.control.target_current),\"time_to_live\":0}",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "easee",
+        "service": "set_charger_dynamic_limit",
+        "x": 1130,
+        "y": 800,
+        "wires": [
+            [
+                "c9369011539a5cfb",
+                "fd07d7f53b6d6f37"
+            ]
+        ]
+    },
+    {
+        "id": "c9369011539a5cfb",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Logging & Status",
+        "func": "const control = msg.payload.control;\nconst data = msg.payload;\n\n// Erstelle Log-Eintrag\nconst logEntry = {\n    timestamp: new Date().toISOString(),\n    action: control.action,\n    mode: control.mode || 'unknown',\n    reason: control.reason,\n    target_current: control.target_current || 0,\n    calculated_power: control.calculated_power || 0,\n    available_surplus: data.calculated ? data.calculated.available_surplus : 0,\n    battery_soc: data.rct ? data.rct.battery_soc : 0,\n    car_soc: data.zoe ? data.zoe.battery : 0\n};\n\n// Speichere letzte 100 Log-Einträge\nlet logs = global.get('charging_logs') || [];\nlogs.unshift(logEntry);\nif (logs.length > 100) logs = logs.slice(0, 100);\nglobal.set('charging_logs', logs);\n\n// Update Status für Dashboard\nconst status = {\n    mode: control.mode || 'unknown',\n    action: control.action,\n    current_charging: data.easee ? data.easee.charging : false,\n    target_current: control.target_current,\n    available_surplus: data.calculated ? data.calculated.available_surplus : 0,\n    battery_soc: data.rct ? data.rct.battery_soc : 0,\n    car_soc: data.zoe ? data.zoe.battery : 0,\n    last_update: new Date().toISOString(),\n    reason: control.reason\n};\n\nglobal.set('charging_status', status);\n\nmsg.payload = logEntry;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1360,
+        "y": 800,
+        "wires": [
+            [
+                "5f53551951e78822"
+            ]
+        ]
+    },
+    {
+        "id": "5f53551951e78822",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Aktion ausgeführt",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "msg",
+        "x": 1570,
+        "y": 800,
+        "wires": []
+    },
+    {
+        "id": "2bd9cb4cf5241bba",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Status: Idle/Hold",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload.control.reason",
+        "targetType": "msg",
+        "statusVal": "payload.control.reason",
+        "statusType": "msg",
+        "x": 620,
+        "y": 960,
+        "wires": []
+    },
+    {
+        "id": "4b2846679267a50f",
+        "type": "inject",
+        "z": "808371fe283a83af",
+        "name": "Zyklischer Update (alle 5min)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "30",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 190,
+        "y": 380,
+        "wires": [
+            [
+                "1e82584428a2015e"
+            ]
+        ]
+    },
+    {
+        "id": "1e82584428a2015e",
+        "type": "change",
+        "z": "808371fe283a83af",
+        "name": "Trigger Sensor Collection",
+        "rules": [
+            {
+                "t": "set",
+                "p": "trigger",
+                "pt": "msg",
+                "to": "manual",
+                "tot": "str"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 460,
+        "y": 380,
+        "wires": [
+            [
+                "a60ca9455e3d3316"
+            ]
+        ]
+    },
+    {
+        "id": "e8ff50286cf3ac4c",
+        "type": "comment",
+        "z": "808371fe283a83af",
+        "name": "KONFIGURATION - Wird live aus HA gelesen (enableGlobalContextStore)",
+        "info": "v2.3: Alle Werte werden direkt aus Home Assistant States gelesen.\n\nBenötigte HA Helpers:\n- input_select.lade_modus (automatik/laden/stoppen/überschuss/günstigster_strom)\n- input_boolean.soc_override (SOC-Limit überbrücken - gilt jetzt für ALLE Modi)\n- input_boolean.tibber_enabled (Günstigstrom-Fallback in Automatik bei PV-Mangel)\n- input_number.max_charge_current\n- input_number.min_charge_current\n- input_number.car_target_soc\n- input_number.min_battery_soc\n- input_number.phases\n- input_number.bridge_max_minutes (Wolken-Überbrückung, Standard 10 min)\n- input_boolean.battery_priority\n- input_boolean.prevent_battery_discharge",
+        "x": 310,
+        "y": 20,
+        "wires": []
+    },
+    {
+        "id": "9c755d8c0512aaa7",
+        "type": "comment",
+        "z": "808371fe283a83af",
+        "name": "SENSOR-MONITORING - Home Assistant Entities überwachen",
+        "info": "v2.3: Polling alle 5 Minuten via Timer + sofortige Reaktion auf Modus-Änderungen.\nSensordaten werden direkt aus dem HA Global Context gelesen (enableGlobalContextStore).\nKeine state-changed Events mehr nötig.",
+        "x": 260,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "e23b180f6a4b757c",
+        "type": "comment",
+        "z": "808371fe283a83af",
+        "name": "HAUPT-LOGIK v2.3 - Berechnung und Steuerung",
+        "info": "Modi (v2.3):\n- automatik: PV-Überschuss zuerst, bei Mangel optional Günstigstrom-Fallback (tibber_enabled). SOC per soc_override überbrückbar. Wolken-Überbrückung aktiv.\n- laden: Fester Ladestrom (max_charge_current), SOC per soc_override überbrückbar\n- stoppen: Wallbox pausiert\n- überschuss: Nur PV, kein Preis-Fallback, SOC per soc_override überbrückbar. Wolken-Überbrückung aktiv.\n- günstigster_strom: Nur Netzstrom, lädt wenn Preis <= Tagestief + 15%, SOC per soc_override überbrückbar",
+        "x": 370,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "53961a86c47ed9f0",
+        "type": "comment",
+        "z": "808371fe283a83af",
+        "name": "AKTIONEN - easee.set_charger_dynamic_limit + pause/resume",
+        "info": "Device-ID: b5b0134f3c9b9d7da1fe77ff580320f2\n\neasee.set_charger_dynamic_limit:\n- current: Ampere-Wert\n- time_to_live: 0 (kein Timeout)\n\neasee.action_command:\n- pause: Wallbox anhalten\n- resume: Wallbox fortsetzen",
+        "x": 840,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "ab34a4562e996f3e",
+        "type": "comment",
+        "z": "808371fe283a83af",
+        "name": "EASEE STEUERUNG v2.0 - Device-ID b5b0134f3c9b9d7da1fe77ff580320f2",
+        "info": "Easee Steuerung:\n\n1. easee.action_command:\n   - action_command: \"pause\" / \"resume\"\n   - Device-ID: b5b0134f3c9b9d7da1fe77ff580320f2\n\n2. easee.set_charger_dynamic_limit:\n   - current: Zielstrom in Ampere\n   - time_to_live: 0\n   - Device-ID: b5b0134f3c9b9d7da1fe77ff580320f2\n\n3. 'The lowest limit wins'\n4. RBE-Filter verhindert redundante API-Calls",
+        "x": 760,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "7a2f02c3c4dc237c",
+        "type": "rbe",
+        "z": "808371fe283a83af",
+        "name": "Filter identische Stromwerte",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": false,
+        "property": "payload.control.target_current",
+        "topi": "topic",
+        "x": 900,
+        "y": 820,
+        "wires": [
+            [
+                "95e9eae5a9c4473d"
+            ]
+        ]
+    },
+    {
+        "id": "6a56f6ed0b2e8680",
+        "type": "api-call-service",
+        "z": "808371fe283a83af",
+        "name": "🔒 RCT Batterie LOCK (Entladung stoppen)",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "switch.turn_on",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [
+            "switch.lock_battery_2"
+        ],
+        "labelId": [],
+        "data": "",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "switch",
+        "service": "turn_on",
+        "x": 1150,
+        "y": 860,
+        "wires": [
+            [
+                "07d7fd44f778dce9"
+            ]
+        ]
+    },
+    {
+        "id": "544957a0c0c882bc",
+        "type": "api-call-service",
+        "z": "808371fe283a83af",
+        "name": "🔓 RCT Batterie UNLOCK (Normalbetrieb)",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "switch.turn_off",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [
+            "switch.lock_battery_2"
+        ],
+        "labelId": [],
+        "data": "",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "switch",
+        "service": "turn_off",
+        "x": 1150,
+        "y": 920,
+        "wires": [
+            [
+                "07d7fd44f778dce9"
+            ]
+        ]
+    },
+    {
+        "id": "3f390fbaadee6a19",
+        "type": "function",
+        "z": "808371fe283a83af",
+        "name": "Battery Lock Steuerung",
+        "func": "const control = msg.payload.control;\nconst config = msg.payload.config;\nconst preventDischarge = config.prevent_battery_discharge;\n\nif (!preventDischarge) {\n    // Schutz deaktiviert: immer unlocken falls noch gelockt\n    if (flow.get('battery_locked')) {\n        flow.set('battery_locked', false);\n        node.warn('[v2.1] RCT Batterie UNLOCK (Schutz deaktiviert)');\n        return [null, msg];\n    }\n    return null;\n}\n\nconst isStarting = control.action === 'start' || control.action === 'charge' || control.action === 'force_charge';\nconst isStopping = control.action === 'stop' || control.action === 'hold';\n\nconst currentLockState = flow.get('battery_locked') || false;\n\n// Lock nur wenn Wallbox tatsächlich startet/lädt\nif (isStarting && !currentLockState) {\n    flow.set('battery_locked', true);\n    node.warn('[v2.1] RCT Batterie LOCK aktiviert (Wallbox lädt)');\n    return [msg, null];\n}\n\n// Unlock bei JEDEM Stop — auch wenn interner State inkonsistent ist\nif (isStopping && currentLockState) {\n    flow.set('battery_locked', false);\n    node.warn('[v2.1] RCT Batterie UNLOCK (Wallbox gestoppt)');\n    return [null, msg];\n}\n\nreturn null;",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "flow.set('battery_locked', false);\nnode.warn('[v2.1] Battery Lock State initialisiert: UNLOCKED');",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 880,
+        "wires": [
+            [
+                "6a56f6ed0b2e8680"
+            ],
+            [
+                "544957a0c0c882bc"
+            ]
+        ],
+        "outputLabels": [
+            "Lock (Wallbox startet)",
+            "Unlock (Wallbox stoppt)"
+        ]
+    },
+    {
+        "id": "07d7fd44f778dce9",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Battery Lock Status",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "true",
+        "targetType": "jsonata",
+        "statusVal": "payload.control.action",
+        "statusType": "msg",
+        "x": 1450,
+        "y": 880,
+        "wires": []
+    },
+    {
+        "id": "e4a1285da24bb34b",
+        "type": "comment",
+        "z": "808371fe283a83af",
+        "name": "RCT BATTERY LOCK v2.1 - Verhindert Batterie-Entladung während Wallbox lädt",
+        "info": "Nutzt rctpower_writesupport Integration (github.com/do-gooder/rctpower_writesupport)\n\nswitch.rct_lock_battery:\n- ON: Setzt power_mng.soc_strategy=2 (External) + battery_power_extern=0\n  → Batterie friert ein (kein Laden, kein Entladen)\n- OFF: Stellt vorherige Strategie wieder her\n  → Normalbetrieb\n\nLogik:\n- Wallbox startet (start/charge/force_charge) → Lock ON\n- Wallbox stoppt (stop) → Lock OFF\n- Nur aktiv wenn prevent_battery_discharge = on",
+        "x": 940,
+        "y": 1000,
+        "wires": []
+    },
+    {
+        "id": "b7c1f62d081edbeb",
+        "type": "server-state-changed",
+        "z": "808371fe283a83af",
+        "name": "Modus-Änderung Monitor",
+        "server": "de3d7b96.f180b8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "input_select.lade_modus",
+                "input_boolean.soc_override",
+                "input_boolean.battery_priority",
+                "input_boolean.prevent_battery_discharge",
+                "input_boolean.tibber_enabled"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": true,
+        "for": "0",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "x": 150,
+        "y": 240,
+        "wires": [
+            [
+                "a60ca9455e3d3316"
+            ]
+        ]
+    },
+    {
+        "id": "a0a2e033b8b8d4f4",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Wallbox pausieren",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "control.reason",
+        "targetType": "msg",
+        "statusVal": "control.reason",
+        "statusType": "msg",
+        "x": 1390,
+        "y": 640,
+        "wires": []
+    },
+    {
+        "id": "fd07d7f53b6d6f37",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "Dynamic limit setzen",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "control.target_current",
+        "statusType": "msg",
+        "x": 1380,
+        "y": 740,
+        "wires": []
+    },
+    {
+        "id": "69f361661e5c7a12",
+        "type": "debug",
+        "z": "808371fe283a83af",
+        "name": "wallbox fortsetzen",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 900,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "de3d7b96.f180b8",
+        "type": "server",
+        "name": "Home Assistant",
+        "addon": true,
+        "rejectUnauthorizedCerts": true,
+        "ha_boolean": "y",
+        "connectionDelay": false,
+        "cacheJson": false,
+        "heartbeat": false,
+        "heartbeatInterval": "",
+        "statusSeparator": "",
+        "enableGlobalContextStore": false
+    },
+    {
+        "id": "7ed10f545f626012",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-home-assistant-websocket": "0.80.3"
+        }
+    }
+]

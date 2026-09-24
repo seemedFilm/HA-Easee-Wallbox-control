@@ -1,0 +1,498 @@
+# ============================================================
+# PV-Laden Package v2.5
+# Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
+#
+# Installation: Kopiere nach /config/packages/pv_laden.yaml
+# Voraussetzung: Node-RED Flow v2.4
+#
+# v2.5 (2026-09-24): Konsolidiert — v2.4 + Dashboard-Helfer aus v1.7
+#   (system_enabled, min_surplus_*, hysteresis_time, max_grid_power_draw,
+#   car_soc_threshold_pure_surplus). Diese werden nur vom Dashboard angezeigt,
+#   der Node-RED-Flow v2.4 wertet sie NICHT aus.
+# ============================================================
+
+# --- Lade-Modus ---
+input_select:
+  lade_modus:
+    name: Lade-Modus
+    icon: mdi:lightning-bolt-circle
+    options:
+      - automatik
+      - laden
+      - stoppen
+      - überschuss
+      - günstigster_strom
+    initial: automatik
+
+# --- Schalter ---
+input_boolean:
+  battery_priority:
+    name: Batterie-Priorität
+    icon: mdi:battery-arrow-up
+    initial: true
+
+  prevent_battery_discharge:
+    name: Batterie-Entladungsschutz
+    icon: mdi:battery-lock
+    initial: true
+
+  soc_override:
+    name: Auto-Ziel-SOC überbrücken
+    icon: mdi:battery-alert-variant
+    initial: false
+
+  tibber_enabled:
+    name: Günstigstrom-Fallback in Automatik
+    icon: mdi:cash
+    initial: false
+
+  # Legacy (v1.7) — nur Dashboard
+  system_enabled:
+    name: Smart Charging System aktiv
+    icon: mdi:power
+    initial: true
+
+# --- Numerische Parameter ---
+input_number:
+  min_charge_current:
+    name: Minimaler Ladestrom
+    icon: mdi:current-ac
+    min: 6
+    max: 16
+    step: 1
+    unit_of_measurement: A
+    mode: slider
+    initial: 7
+
+  max_charge_current:
+    name: Maximaler Ladestrom
+    icon: mdi:current-ac
+    min: 6
+    max: 32
+    step: 1
+    unit_of_measurement: A
+    mode: slider
+    initial: 32
+
+  phases:
+    name: Phasen
+    icon: mdi:sine-wave
+    min: 1
+    max: 3
+    step: 1
+    mode: box
+    initial: 3
+
+  min_battery_soc:
+    name: Minimaler Batterie-SOC
+    icon: mdi:battery-50
+    min: 50
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    initial: 95
+
+  car_target_soc:
+    name: Auto-Ziel-SOC (Hard-Limit)
+    icon: mdi:battery-80
+    min: 50
+    max: 80
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+    initial: 80
+
+  soc_override_max_duration:
+    name: SOC-Override Auto-Reset nach
+    icon: mdi:timer-alert
+    min: 0
+    max: 720
+    step: 30
+    unit_of_measurement: min
+    mode: slider
+    initial: 240
+
+  bridge_max_minutes:
+    name: Wolken-Überbrückung max. Dauer
+    icon: mdi:timer-sand
+    min: 1
+    max: 30
+    step: 1
+    unit_of_measurement: min
+    mode: slider
+    initial: 10
+
+  # Legacy (v1.7) — nur Dashboard, vom Flow v2.4 nicht ausgewertet
+  min_surplus_to_start:
+    name: Min. Überschuss zum Start
+    icon: mdi:solar-power
+    min: 0
+    max: 10000
+    step: 100
+    unit_of_measurement: W
+    mode: slider
+    initial: 4800
+
+  min_surplus_to_continue:
+    name: Min. Überschuss zum Weiterladen
+    icon: mdi:solar-power
+    min: 0
+    max: 10000
+    step: 100
+    unit_of_measurement: W
+    mode: slider
+    initial: 3000
+
+  hysteresis_time:
+    name: Hysterese-Zeit
+    icon: mdi:timer
+    min: 0
+    max: 10
+    step: 0.5
+    unit_of_measurement: min
+    mode: slider
+    initial: 2
+
+  max_grid_power_draw:
+    name: Max. Netzbezug (bei Entladungsschutz)
+    icon: mdi:transmission-tower
+    min: 0
+    max: 2000
+    step: 100
+    unit_of_measurement: W
+    mode: slider
+    initial: 500
+
+  car_soc_threshold_pure_surplus:
+    name: Auto-SOC Schwelle für reinen Überschuss
+    icon: mdi:battery-alert
+    min: 50
+    max: 100
+    step: 5
+    unit_of_measurement: '%'
+    mode: slider
+    initial: 80
+
+# --- Template Sensoren ---
+template:
+  - sensor:
+      - name: "Calculated PV Surplus"
+        unique_id: calculated_pv_surplus
+        icon: mdi:solar-power-variant
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        availability: >
+          {{ states('sensor.rct_power_storage_grid_power') not in ['unknown', 'unavailable', 'none'] }}
+        state: >
+          {% set grid = states('sensor.rct_power_storage_grid_power') | float(0) %}
+          {% set wallbox = states('sensor.easee_home_power') | float(0) %}
+          {% set charging = is_state('binary_sensor.easee_home_charging', 'on') %}
+          {% set battery_power = states('sensor.rct_power_storage_battery_power') | float(0) %}
+          {% set prevent_discharge = is_state('input_boolean.prevent_battery_discharge', 'on') %}
+          {% set surplus = 0 %}
+          {% if grid < 0 %}
+            {% set surplus = (grid | abs) %}
+            {% if charging %}
+              {% set surplus = surplus + wallbox %}
+            {% endif %}
+          {% else %}
+            {% if charging %}
+              {% set surplus = wallbox - grid %}
+            {% else %}
+              {% set surplus = -grid %}
+            {% endif %}
+          {% endif %}
+          {% if prevent_discharge and battery_power > 0 %}
+            {% set surplus = surplus - battery_power %}
+          {% endif %}
+          {{ surplus | round(0) }}
+
+      - name: "Calculated Charge Current"
+        unique_id: calculated_charge_current
+        icon: mdi:current-ac
+        unit_of_measurement: A
+        state_class: measurement
+        state: >
+          {% set surplus = states('sensor.calculated_pv_surplus') | float(0) %}
+          {% set phases = states('input_number.phases') | float(3) %}
+          {% set current = surplus / (230 * phases) if phases == 3 else surplus / 230 %}
+          {% set min_c = states('input_number.min_charge_current') | float(7) %}
+          {% set max_c = states('input_number.max_charge_current') | float(32) %}
+          {% if current < min_c %}0
+          {% elif current > max_c %}{{ max_c | int }}
+          {% else %}{{ current | round(0) | int }}
+          {% endif %}
+
+      - name: "Wallbox Charge Power kW"
+        unique_id: wallbox_charge_power_kw
+        icon: mdi:ev-station
+        unit_of_measurement: kW
+        device_class: power
+        state_class: measurement
+        availability: >
+          {{ states('sensor.easee_home_power') not in ['unknown', 'unavailable', 'none'] }}
+        state: >
+          {{ (states('sensor.easee_home_power') | float(0) / 1000) | round(2) }}
+
+      - name: "Battery Flow Direction"
+        unique_id: battery_flow_direction
+        icon: >
+          {% set p = states('sensor.rct_power_storage_battery_power') | float(0) %}
+          {{ 'mdi:battery-charging' if p < -100 else ('mdi:battery-arrow-down' if p > 100 else 'mdi:battery') }}
+        state: >
+          {% set p = states('sensor.rct_power_storage_battery_power') | float(0) %}
+          {{ 'Laden' if p < -100 else ('Entladen' if p > 100 else 'Ruhend') }}
+
+      - name: "Grid Flow Direction"
+        unique_id: grid_flow_direction
+        icon: >
+          {% set p = states('sensor.rct_power_storage_grid_power') | float(0) %}
+          {{ 'mdi:transmission-tower-export' if p < -100 else ('mdi:transmission-tower-import' if p > 100 else 'mdi:transmission-tower') }}
+        state: >
+          {% set p = states('sensor.rct_power_storage_grid_power') | float(0) %}
+          {{ 'Einspeisung' if p < -100 else ('Bezug' if p > 100 else 'Neutral') }}
+
+      - name: "Tibber Cheapest Now"
+        unique_id: tibber_cheapest_now
+        icon: >
+          {{ 'mdi:cash-check' if is_state('binary_sensor.tibber_is_cheapest_now', 'on') else 'mdi:cash-remove' }}
+        state: >
+          {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
+          {% set min_price = state_attr('sensor.sectorchan_electricity_price', 'min_price') | float(0) %}
+          {% set threshold = min_price * 1.15 %}
+          {{ (price * 100) | round(1) }} / {{ (threshold * 100) | round(1) }} ct/kWh
+
+      - name: "Smart Charging Status"
+        unique_id: smart_charging_status
+        icon: mdi:information
+        state: >
+          {% set mode = states('input_select.lade_modus') %}
+          {% set charging = is_state('binary_sensor.easee_home_charging', 'on') %}
+          {% set plugged = states('sensor.zoe_plug_state') in ['Plugged in', 'plugged'] %}
+          {% set car_soc = states('sensor.zoe_battery') | float(0) %}
+          {% set target_soc = states('input_number.car_target_soc') | float(80) %}
+          {% set override = is_state('input_boolean.soc_override', 'on') %}
+          {% set cheap = is_state('binary_sensor.tibber_is_cheapest_now', 'on') %}
+          {% if not plugged %}Warte auf Auto-Anschluss
+          {% elif mode == 'stoppen' %}Manuell gestoppt
+          {% elif car_soc >= target_soc and not override %}Auto-SOC Limit ({{ target_soc | int }}%) – Override erforderlich zum Weiterladen
+          {% elif car_soc >= target_soc and override and mode == 'laden' %}Laden erzwungen (ÜBER {{ target_soc | int }}%!, {{ states('input_number.max_charge_current') | int }}A)
+          {% elif car_soc >= target_soc and override %}Lädt über {{ target_soc | int }}% hinaus (Override aktiv, {{ states('sensor.calculated_charge_current') }}A)
+          {% elif mode == 'laden' %}Laden erzwungen ({{ states('input_number.max_charge_current') | int }}A)
+          {% elif mode == 'günstigster_strom' and cheap %}Günstigster Strom aktiv ({{ states('input_number.max_charge_current') | int }}A)
+          {% elif mode == 'günstigster_strom' %}Warte auf Tagestief-Strompreis
+          {% elif cheap and mode == 'automatik' and is_state('input_boolean.tibber_enabled', 'on') %}Günstigstrom-Fallback ({{ states('input_number.max_charge_current') | int }}A)
+          {% elif charging %}Lädt ({{ states('sensor.calculated_charge_current') }}A)
+          {% else %}Bereit (warte auf Überschuss)
+          {% endif %}
+
+      # Momentane Netz-Ladeleistung der Wallbox: Easee-Leistung, die NICHT aus
+      # PV-Überschuss stammt, sondern zusätzlich aus dem Netz bezogen wird.
+      - name: "Wallbox Netzladeleistung"
+        unique_id: wallbox_grid_charge_power
+        icon: mdi:transmission-tower-import
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        availability: >
+          {{ states('sensor.easee_home_power') not in ['unknown', 'unavailable', 'none'] }}
+        state: >
+          {% set wallbox = states('sensor.easee_home_power') | float(0) %}
+          {% set grid_import = states('sensor.rct_power_storage_grid_power') | float(0) %}
+          {{ [wallbox, grid_import if grid_import > 0 else 0] | min | round(0) }}
+
+      # Kosten-Rate (EUR/h) für den Netz-Anteil der Wallbox-Ladeleistung,
+      # Basis: aktueller Tibber-Preis. Quelle für die Riemann-Summe unten.
+      - name: "Wallbox Netzladekosten Rate"
+        unique_id: wallbox_grid_charge_cost_rate
+        icon: mdi:cash-clock
+        unit_of_measurement: "EUR/h"
+        state_class: measurement
+        state: >
+          {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
+          {% set grid_charge_kw = states('sensor.wallbox_grid_charge_power') | float(0) / 1000 %}
+          {{ (price * grid_charge_kw) | round(6) }}
+
+  - binary_sensor:
+      - name: "Tibber Is Cheapest Now"
+        unique_id: tibber_is_cheapest_now
+        icon: mdi:cash-check
+        state: >
+          {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
+          {% set min_price = state_attr('sensor.sectorchan_electricity_price', 'min_price') | float(0) %}
+          {{ price > 0 and price <= (min_price * 1.15) }}
+
+      - name: "Battery SOC Above Minimum"
+        unique_id: battery_soc_above_minimum
+        device_class: battery
+        state: >
+          {% set soc = states('sensor.rct_power_storage_battery_state_of_charge') | float(0) %}
+          {{ soc >= (states('input_number.min_battery_soc') | float(95)) }}
+
+      - name: "Car SOC Below Target"
+        unique_id: car_soc_below_target
+        device_class: battery
+        state: >
+          {% set soc = states('sensor.zoe_battery') | float(0) %}
+          {{ soc < (states('input_number.car_target_soc') | float(80)) }}
+
+# --- Automationen ---
+automation:
+  - id: notify_car_80_percent
+    alias: "PV-Laden: Auto 80% erreicht"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.zoe_battery
+        above: 79.5
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: input_select.lade_modus
+            state: "stoppen"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: input_boolean.soc_override
+            state: "on"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Smartes Laden: Ziel erreicht"
+          message: >
+            Renault Zoe hat 80% SOC erreicht ({{ states('sensor.zoe_battery') }}%).
+            Ladevorgang wird gestoppt.
+
+  - id: notify_car_over_80_override_active
+    alias: "PV-Laden: Auto lädt über 80% (Override aktiv)"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.zoe_battery
+        above: 79.5
+    condition:
+      - condition: state
+        entity_id: input_boolean.soc_override
+        state: "on"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: input_select.lade_modus
+            state: "stoppen"
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Smartes Laden: SOC-Override aktiv"
+          message: >
+            ⚠️ Renault Zoe lädt über 80% hinaus ({{ states('sensor.zoe_battery') }}%),
+            da SOC-Override aktiv ist.
+
+  - id: reset_soc_override_on_unplug
+    alias: "PV-Laden: SOC-Override bei Ausstecken zurücksetzen"
+    trigger:
+      - platform: state
+        entity_id: sensor.zoe_plug_state
+        from: "Plugged in"
+      - platform: state
+        entity_id: sensor.zoe_plug_state
+        from: "plugged"
+    condition:
+      - condition: state
+        entity_id: input_boolean.soc_override
+        state: "on"
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.soc_override
+      - service: notify.mobile_app
+        data:
+          title: "Smartes Laden: SOC-Override zurückgesetzt"
+          message: >
+            SOC-Override wurde nach Ausstecken des Fahrzeugs automatisch deaktiviert.
+
+  - id: reset_soc_override_timeout
+    alias: "PV-Laden: SOC-Override nach Timeout zurücksetzen"
+    trigger:
+      - platform: time_pattern
+        minutes: "/5"
+    condition:
+      - condition: state
+        entity_id: input_boolean.soc_override
+        state: "on"
+      - condition: numeric_state
+        entity_id: input_number.soc_override_max_duration
+        above: 0
+      - condition: template
+        value_template: >
+          {{ (now() - states.input_boolean.soc_override.last_changed).total_seconds()
+             > (states('input_number.soc_override_max_duration') | float(240) * 60) }}
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.soc_override
+      - service: notify.mobile_app
+        data:
+          title: "Smartes Laden: SOC-Override zurückgesetzt"
+          message: >
+            SOC-Override war länger als {{ states('input_number.soc_override_max_duration') | int }}
+            Minuten aktiv und wurde automatisch deaktiviert (Timeout).
+
+# --- Kosten-Integration: Riemann-Summe der Rate (EUR/h) -> kumulierte EUR ---
+sensor:
+  - platform: integration
+    name: "Wallbox Netzladekosten Gesamt"
+    unique_id: wallbox_grid_charge_cost_total
+    source: sensor.wallbox_grid_charge_cost_rate
+    unit_time: h
+    round: 4
+    method: left
+
+# --- Monatswerte mit Vormonats-Vergleich (Attribut last_period) ---
+utility_meter:
+  wallbox_energy_monthly:
+    source: sensor.easee_home_lifetime_energy
+    cycle: monthly
+    name: "Wallbox Ladeenergie (Monat)"
+    unique_id: wallbox_energy_monthly
+
+  wallbox_grid_cost_monthly:
+    source: sensor.wallbox_grid_charge_cost_total
+    cycle: monthly
+    name: "Wallbox Netzladekosten (Monat)"
+    unique_id: wallbox_grid_cost_monthly
+
+# --- Recorder: Langzeit-Speicherung der package-eigenen Entities ---
+# Externe Entities (RCT/Easee/Zoe/Tibber) siehe README "Externe Abhängigkeiten"
+# und ggf. separat in der Haupt-configuration.yaml erfassen.
+recorder:
+  include:
+    entities:
+      - input_select.lade_modus
+      - sensor.calculated_pv_surplus
+      - sensor.calculated_charge_current
+      - sensor.wallbox_charge_power_kw
+      - sensor.smart_charging_status
+      - sensor.tibber_cheapest_now
+      - sensor.wallbox_grid_charge_power
+      - sensor.wallbox_grid_charge_cost_rate
+      - sensor.wallbox_grid_charge_cost_total
+      - sensor.wallbox_energy_monthly
+      - sensor.wallbox_grid_cost_monthly
+
+# --- History: Graph-Ansicht im Dashboard ---
+history:
+  include:
+    entities:
+      - sensor.calculated_pv_surplus
+      - sensor.wallbox_charge_power_kw
+      - sensor.wallbox_grid_charge_power
+      - sensor.wallbox_energy_monthly
+      - sensor.wallbox_grid_cost_monthly
+
+# --- Logbook: Ereignisse ---
+logbook:
+  include:
+    entities:
+      - input_select.lade_modus
+      - sensor.smart_charging_status
