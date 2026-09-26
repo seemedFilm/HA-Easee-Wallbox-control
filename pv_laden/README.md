@@ -1,4 +1,4 @@
-# PV-Laden Package v2.5.1
+# PV-Laden Package v2.5.2
 
 Home Assistant Konfiguration für das Smarte PV-Laden System (Node-RED Flow v2.5).
 
@@ -96,6 +96,9 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 | `sensor.zoe_*` | My Renault |
 
 ## Changelog
+
+### v2.5.2 (2026-09-26)
+- Fix: Benachrichtigungen nutzten `notify.mobile_app` (existiert nicht) → jetzt `notify.mobile_app_sm_s938b`. **Für andere Installationen auf den eigenen Dienst anpassen** (Entwicklerwerkzeuge → Aktionen → `notify.`)
 
 ### v2.5.1 (2026-09-26)
 - Fix: `sensor.easee_home_power` liefert kW → Templates für Netzladeleistung, Kostenrate und Wallbox-kW rechnen jetzt einheitenabhängig in W um (vorher Faktor 1000 zu klein)

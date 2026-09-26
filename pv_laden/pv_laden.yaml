@@ -1,5 +1,5 @@
 # ============================================================
-# PV-Laden Package v2.5.1
+# PV-Laden Package v2.5.2
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
@@ -360,7 +360,7 @@ automation:
             entity_id: input_boolean.soc_override
             state: "on"
     action:
-      - service: notify.mobile_app
+      - service: notify.mobile_app_sm_s938b
         data:
           title: "Smartes Laden: Ziel erreicht"
           message: >
@@ -383,7 +383,7 @@ automation:
             entity_id: input_select.lade_modus
             state: "stoppen"
     action:
-      - service: notify.mobile_app
+      - service: notify.mobile_app_sm_s938b
         data:
           title: "Smartes Laden: SOC-Override aktiv"
           message: >
@@ -407,7 +407,7 @@ automation:
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.soc_override
-      - service: notify.mobile_app
+      - service: notify.mobile_app_sm_s938b
         data:
           title: "Smartes Laden: SOC-Override zurückgesetzt"
           message: >
@@ -433,7 +433,7 @@ automation:
       - service: input_boolean.turn_off
         target:
           entity_id: input_boolean.soc_override
-      - service: notify.mobile_app
+      - service: notify.mobile_app_sm_s938b
         data:
           title: "Smartes Laden: SOC-Override zurückgesetzt"
           message: >

@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.5** · HA Package **v2.5.1** · Dashboard **v1.7**
+**Aktueller Stand:** Node-RED Flow **v2.5** · HA Package **v2.5.2** · Dashboard **v1.7**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -234,8 +234,9 @@ Um 403-Fehler bei der Easee API zu vermeiden:
    ```
 2. `pv_laden/pv_laden.yaml` nach `/config/packages/pv_laden.yaml` kopieren (**nicht** in die `configuration.yaml` einfügen).
 3. Eine evtl. vorhandene alte `pv_loading.yaml` oder frühere Kopien der Helper löschen.
-4. *Entwicklerwerkzeuge → YAML → Konfiguration prüfen* → Neustart.
-5. Entity-IDs der Kosten-Sensoren prüfen/umbenennen (siehe [Monatsauswertung](#monatsauswertung--netzladekosten)).
+4. In `pv_laden.yaml` den Benachrichtigungsdienst `notify.mobile_app_sm_s938b` (4×) durch deinen eigenen ersetzen (*Entwicklerwerkzeuge → Aktionen* → nach `notify.mobile_app_` suchen).
+5. *Entwicklerwerkzeuge → YAML → Konfiguration prüfen* → Neustart.
+6. Entity-IDs der Kosten-Sensoren prüfen/umbenennen (siehe [Monatsauswertung](#monatsauswertung--netzladekosten)).
 
 ### 2. Node-RED Flow importieren
 
@@ -364,6 +365,9 @@ Derzeit keine bekannten Probleme.
 - **Fix Automatik / Nur PV-Überschuss:** `sensor.easee_home_power` liefert kW, der Flow rechnete mit W. Während einer PV-Ladung wurde dadurch nur ~15 statt ~15000 W zum Überschuss addiert → der Überschuss fiel unter die Startschwelle (3600 W), der Flow ging in die Wolken-Überbrückung (Minimalstrom) und **stoppte nach `bridge_max_minutes`**. Die Leistung wird jetzt anhand der Einheit in W umgerechnet.
 - Fix: `current` wird aus `sensor.easee_home_dynamic_charger_limit` gelesen (`…maximum_allowed_charge_current` existiert nicht mehr)
 
+### Package v2.5.2 (2026-09-26)
+- Fix: Benachrichtigungs-Automationen riefen den nicht existierenden Dienst `notify.mobile_app` auf → jetzt `notify.mobile_app_sm_s938b` (für eigene Installation anpassen, siehe Installation)
+
 ### Package v2.5.1 (2026-09-26)
 - Fix: `sensor.easee_home_power` liefert **kW**, die Templates rechneten mit W → Netzladeleistung, Kostenrate und Wallbox-kW waren um Faktor 1000 zu klein (z. B. 0,0027 € statt ca. 2,09 € für eine 16,8-kWh-Ladung). Umrechnung prüft jetzt die Einheit des Sensors.
 - Fix: `calculated_pv_surplus` und `smart_charging_status` nutzten noch `binary_sensor.easee_home_charging` → jetzt `sensor.easee_home_status == 'charging'`
@@ -425,7 +429,7 @@ Wer mit diesem Projekt Geld verdienen möchte — z. B. durch Verkauf, Einbau in
 
 ---
 
-**Version:** Flow 2.5 · Package 2.5.1
+**Version:** Flow 2.5 · Package 2.5.2
 **Aktualisiert:** 2026-09-24
 
 Entwickelt von Patrick mit Claude Code.
