@@ -1,14 +1,14 @@
 # ============================================================
-# PV-Laden Package v2.5
+# PV-Laden Package v2.5.1
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.4
+# Voraussetzung: Node-RED Flow v2.5 (v2.4 kompatibel)
 #
 # v2.5 (2026-09-24): Konsolidiert — v2.4 + Dashboard-Helfer aus v1.7
 #   (system_enabled, min_surplus_*, hysteresis_time, max_grid_power_draw,
 #   car_soc_threshold_pure_surplus). Diese werden nur vom Dashboard angezeigt,
-#   der Node-RED-Flow v2.4 wertet sie NICHT aus.
+#   der Node-RED-Flow (ab v2.4) wertet sie NICHT aus.
 # ============================================================
 
 # --- Lade-Modus ---
@@ -123,7 +123,7 @@ input_number:
     mode: slider
     initial: 10
 
-  # Legacy (v1.7) — nur Dashboard, vom Flow v2.4 nicht ausgewertet
+  # Legacy (v1.7) — nur Dashboard, vom Flow (ab v2.4) nicht ausgewertet
   min_surplus_to_start:
     name: Min. Überschuss zum Start
     icon: mdi:solar-power

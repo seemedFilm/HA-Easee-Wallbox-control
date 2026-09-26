@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.4** · HA Package **v2.5** · Dashboard **v1.7**
+**Aktueller Stand:** Node-RED Flow **v2.5** · HA Package **v2.5.1** · Dashboard **v1.7**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -12,7 +12,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.4_2026-09-03.json`](smartes_pv_laden_flow_v2.4_2026-09-03.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`smartes_pv_laden_flow_v2.5_2026-09-26.json`](smartes_pv_laden_flow_v2.5_2026-09-26.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -108,7 +108,7 @@ Alle Parameter werden live aus Home Assistant gelesen und sofort wirksam.
 | `bridge_max_minutes` | 10 min | 1–30 min | Max. Dauer der Wolken-Überbrückung (Automatik + Nur PV-Überschuss) |
 | `soc_override_max_duration` | 240 min | 0–720 min | `soc_override` wird nach dieser Zeit automatisch zurückgesetzt (0 = nie) |
 
-> Das Package enthält zusätzlich einige Helper aus v1.7 (`system_enabled`, `min_surplus_to_start`, `min_surplus_to_continue`, `hysteresis_time`, `max_grid_power_draw`, `car_soc_threshold_pure_surplus`). Sie werden nur noch im Dashboard angezeigt — der Flow v2.4 wertet sie **nicht** aus.
+> Das Package enthält zusätzlich einige Helper aus v1.7 (`system_enabled`, `min_surplus_to_start`, `min_surplus_to_continue`, `hysteresis_time`, `max_grid_power_draw`, `car_soc_threshold_pure_surplus`). Sie werden nur noch im Dashboard angezeigt — der Flow (ab v2.4) wertet sie **nicht** aus.
 
 ---
 
@@ -240,9 +240,9 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.4_2026-09-03.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.5_2026-09-26.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
-4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2` (3 Stellen). Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
+4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
 
 In den Node-RED Settings muss aktiviert sein (damit der Flow die HA-States live lesen kann):
@@ -340,8 +340,7 @@ Prüfe in Reihenfolge:
 
 ## Bekannte Probleme
 
-- **Flow rechnet die Wallbox-Leistung in W, Easee liefert kW.** Im Node *„Berechne verfügbaren Überschuss“* wird `data.easee.power` (z. B. `15.2`) zum Überschuss in W addiert. Während einer PV-Ladung wird der Überschuss dadurch fast nur aus der Einspeisung berechnet und deutlich unterschätzt (betrifft Automatik und Nur PV-Überschuss, nicht „Laden erzwingen“).
-- **`sensor.easee_home_maximum_allowed_charge_current` existiert nicht mehr** (Easee-Integration). Der Flow v2.4 liest ihn im Node *„Sammle alle Sensordaten“* als aktuellen Ladestrom — dieser Wert ist dadurch immer `0`. Im Dashboard ist er bereits durch `sensor.easee_home_dynamic_charger_limit` ersetzt; im Flow steht die Korrektur noch aus.
+Derzeit keine bekannten Probleme.
 
 ---
 
@@ -349,7 +348,7 @@ Prüfe in Reihenfolge:
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.4_2026-09-03.json       # Node-RED Flow (aktuell)
+├── smartes_pv_laden_flow_v2.5_2026-09-26.json       # Node-RED Flow (aktuell)
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -360,6 +359,10 @@ Prüfe in Reihenfolge:
 ---
 
 ## Changelog
+
+### Flow v2.5 (2026-09-26)
+- **Fix Automatik / Nur PV-Überschuss:** `sensor.easee_home_power` liefert kW, der Flow rechnete mit W. Während einer PV-Ladung wurde dadurch nur ~15 statt ~15000 W zum Überschuss addiert → der Überschuss fiel unter die Startschwelle (3600 W), der Flow ging in die Wolken-Überbrückung (Minimalstrom) und **stoppte nach `bridge_max_minutes`**. Die Leistung wird jetzt anhand der Einheit in W umgerechnet.
+- Fix: `current` wird aus `sensor.easee_home_dynamic_charger_limit` gelesen (`…maximum_allowed_charge_current` existiert nicht mehr)
 
 ### Package v2.5.1 (2026-09-26)
 - Fix: `sensor.easee_home_power` liefert **kW**, die Templates rechneten mit W → Netzladeleistung, Kostenrate und Wallbox-kW waren um Faktor 1000 zu klein (z. B. 0,0027 € statt ca. 2,09 € für eine 16,8-kWh-Ladung). Umrechnung prüft jetzt die Einheit des Sensors.
@@ -422,7 +425,7 @@ Wer mit diesem Projekt Geld verdienen möchte — z. B. durch Verkauf, Einbau in
 
 ---
 
-**Version:** Flow 2.4 · Package 2.5
+**Version:** Flow 2.5 · Package 2.5.1
 **Aktualisiert:** 2026-09-24
 
 Entwickelt von Patrick mit Claude Code.

@@ -1,6 +1,6 @@
-# PV-Laden Package v2.5
+# PV-Laden Package v2.5.1
 
-Home Assistant Konfiguration für das Smarte PV-Laden System (Node-RED Flow v2.4).
+Home Assistant Konfiguration für das Smarte PV-Laden System (Node-RED Flow v2.5).
 
 ## Dateistruktur
 
@@ -97,6 +97,10 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ## Changelog
 
+### v2.5.1 (2026-09-26)
+- Fix: `sensor.easee_home_power` liefert kW → Templates für Netzladeleistung, Kostenrate und Wallbox-kW rechnen jetzt einheitenabhängig in W um (vorher Faktor 1000 zu klein)
+- Fix: `calculated_pv_surplus` und `smart_charging_status` nutzen `sensor.easee_home_status` statt des entfernten `binary_sensor.easee_home_charging`
+
 ### v2.5 (2026-09-24)
 - Wieder aufgenommen (nur fürs Dashboard, vom Node-RED-Flow v2.4 NICHT ausgewertet): `input_boolean.system_enabled`, `input_number.min_surplus_to_start`, `min_surplus_to_continue`, `hysteresis_time`, `max_grid_power_draw`, `car_soc_threshold_pure_surplus` — das Live-Dashboard referenziert sie noch
 - Neu: `unique_id` für beide `utility_meter` (`wallbox_energy_monthly`, `wallbox_grid_cost_monthly`), damit die Entity-IDs in der Registry festgelegt werden können
@@ -140,4 +144,4 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 ---
 
 **Version:** 2.4
-**Kompatibilität:** Node-RED Flow v2.4, Home Assistant 2024.x+
+**Kompatibilität:** Node-RED Flow v2.5 (v2.4 kompatibel), Home Assistant 2024.x+
