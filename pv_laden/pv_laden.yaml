@@ -187,8 +187,9 @@ template:
           {{ states('sensor.rct_power_storage_grid_power') not in ['unknown', 'unavailable', 'none'] }}
         state: >
           {% set grid = states('sensor.rct_power_storage_grid_power') | float(0) %}
-          {% set wallbox = states('sensor.easee_home_power') | float(0) %}
-          {% set charging = is_state('binary_sensor.easee_home_charging', 'on') %}
+          {# Easee liefert kW -> in W umrechnen (Einheit wird geprüft) #}
+          {% set wallbox = (states('sensor.easee_home_power') | float(0)) * (1000 if state_attr('sensor.easee_home_power', 'unit_of_measurement') == 'kW' else 1) %}
+          {% set charging = is_state('sensor.easee_home_status', 'charging') %}
           {% set battery_power = states('sensor.rct_power_storage_battery_power') | float(0) %}
           {% set prevent_discharge = is_state('input_boolean.prevent_battery_discharge', 'on') %}
           {% set surplus = 0 %}
@@ -234,7 +235,7 @@ template:
         availability: >
           {{ states('sensor.easee_home_power') not in ['unknown', 'unavailable', 'none'] }}
         state: >
-          {{ (states('sensor.easee_home_power') | float(0) / 1000) | round(2) }}
+          {{ ((states('sensor.easee_home_power') | float(0)) * (1000 if state_attr('sensor.easee_home_power', 'unit_of_measurement') == 'kW' else 1) / 1000) | round(2) }}
 
       - name: "Battery Flow Direction"
         unique_id: battery_flow_direction
@@ -269,7 +270,7 @@ template:
         icon: mdi:information
         state: >
           {% set mode = states('input_select.lade_modus') %}
-          {% set charging = is_state('binary_sensor.easee_home_charging', 'on') %}
+          {% set charging = is_state('sensor.easee_home_status', 'charging') %}
           {% set plugged = states('sensor.zoe_plug_state') in ['Plugged in', 'plugged'] %}
           {% set car_soc = states('sensor.zoe_battery') | float(0) %}
           {% set target_soc = states('input_number.car_target_soc') | float(80) %}
@@ -299,7 +300,8 @@ template:
         availability: >
           {{ states('sensor.easee_home_power') not in ['unknown', 'unavailable', 'none'] }}
         state: >
-          {% set wallbox = states('sensor.easee_home_power') | float(0) %}
+          {# Easee liefert kW -> in W umrechnen (Einheit wird geprüft) #}
+          {% set wallbox = (states('sensor.easee_home_power') | float(0)) * (1000 if state_attr('sensor.easee_home_power', 'unit_of_measurement') == 'kW' else 1) %}
           {% set grid_import = states('sensor.rct_power_storage_grid_power') | float(0) %}
           {{ [wallbox, grid_import if grid_import > 0 else 0] | min | round(0) }}
 

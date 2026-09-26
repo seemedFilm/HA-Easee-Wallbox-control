@@ -340,6 +340,7 @@ Prüfe in Reihenfolge:
 
 ## Bekannte Probleme
 
+- **Flow rechnet die Wallbox-Leistung in W, Easee liefert kW.** Im Node *„Berechne verfügbaren Überschuss“* wird `data.easee.power` (z. B. `15.2`) zum Überschuss in W addiert. Während einer PV-Ladung wird der Überschuss dadurch fast nur aus der Einspeisung berechnet und deutlich unterschätzt (betrifft Automatik und Nur PV-Überschuss, nicht „Laden erzwingen“).
 - **`sensor.easee_home_maximum_allowed_charge_current` existiert nicht mehr** (Easee-Integration). Der Flow v2.4 liest ihn im Node *„Sammle alle Sensordaten“* als aktuellen Ladestrom — dieser Wert ist dadurch immer `0`. Im Dashboard ist er bereits durch `sensor.easee_home_dynamic_charger_limit` ersetzt; im Flow steht die Korrektur noch aus.
 
 ---
@@ -359,6 +360,10 @@ Prüfe in Reihenfolge:
 ---
 
 ## Changelog
+
+### Package v2.5.1 (2026-09-26)
+- Fix: `sensor.easee_home_power` liefert **kW**, die Templates rechneten mit W → Netzladeleistung, Kostenrate und Wallbox-kW waren um Faktor 1000 zu klein (z. B. 0,0027 € statt ca. 2,09 € für eine 16,8-kWh-Ladung). Umrechnung prüft jetzt die Einheit des Sensors.
+- Fix: `calculated_pv_surplus` und `smart_charging_status` nutzten noch `binary_sensor.easee_home_charging` → jetzt `sensor.easee_home_status == 'charging'`
 
 ### Package v2.5 (2026-09-24)
 - Konsolidiert: `pv_laden.yaml` ist die einzige gültige HA-Konfiguration (alte `home-assistant-configuration.yaml` → `archive/`)
