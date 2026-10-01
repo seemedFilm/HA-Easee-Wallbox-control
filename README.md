@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.6** · HA Package **v2.6** · Dashboard **v1.8**
+**Aktueller Stand:** Node-RED Flow **v2.6** · HA Package **v2.6.1** · Dashboard **v1.8**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -363,6 +363,9 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Package v2.6.1 (2026-10-01)
+- **Fix Dashboard-Verläufe:** Die globale `recorder`-Whitelist im Package enthielt seit v2.4 keine externen Sensoren mehr (RCT/Easee/Zoe/Tibber) → ab 27.09.2026 keine Historie, Charts zeigten konstante Werte. Wieder aufgenommen
 
 ### Flow v2.6 / Package v2.6 / Dashboard v1.8 (2026-10-01)
 - **Günstigstrom-Schwelle in Cent statt Prozent:** Schwelle = Tagestief + `input_number.cheap_price_tolerance_ct` (Standard 3 ct, 0–15 ct) statt Tagestief × 1,15. Gilt für den Modus „Günstigster Strom“, den Automatik-Fallback, `binary_sensor.tibber_is_cheapest_now` und `sensor.tibber_cheapest_now`

@@ -1,5 +1,5 @@
 # ============================================================
-# PV-Laden Package v2.6
+# PV-Laden Package v2.6.1
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
@@ -7,6 +7,8 @@
 #
 # v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
 #   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
+# v2.6.1 (2026-10-01): Recorder/History wieder inkl. externer Sensoren (RCT/Easee/
+#   Zoe/Tibber) – die globale include-Whitelist hatte deren Aufzeichnung gestoppt.
 #
 # v2.5 (2026-09-24): Konsolidiert — v2.4 + Dashboard-Helfer aus v1.7
 #   (system_enabled, min_surplus_*, hysteresis_time, max_grid_power_draw,
@@ -479,14 +481,39 @@ utility_meter:
     name: "Wallbox Netzladekosten (Monat)"
     unique_id: wallbox_grid_cost_monthly
 
-# --- Recorder: Langzeit-Speicherung der package-eigenen Entities ---
-# Externe Entities (RCT/Easee/Zoe/Tibber) siehe README "Externe Abhängigkeiten"
-# und ggf. separat in der Haupt-configuration.yaml erfassen.
+# --- Recorder ---
+# ACHTUNG: "recorder: include" wirkt GLOBAL für ganz Home Assistant (Whitelist).
+# Was hier fehlt, wird überhaupt nicht aufgezeichnet -> keine Verläufe/Charts.
+# Deshalb stehen hier auch die externen Sensoren (RCT/Easee/Zoe/Tibber), die
+# Flow und Dashboard brauchen. (v2.4–v2.6 fehlten sie -> ab 27.09.2026 keine
+# Historie für Ladeleistung, Netz, PV, Zoe-SOC, Strompreis.)
 recorder:
   include:
     entities:
+      # RCT Wechselrichter / Speicher
+      - sensor.rct_power_storage_grid_power
+      - sensor.rct_power_storage_battery_state_of_charge
+      - sensor.rct_power_storage_battery_power
+      - sensor.rct_power_storage_inverter_ac_power
+      - sensor.rct_power_storage_consumer_power
+      # Easee Wallbox
+      - sensor.easee_home_power
+      - sensor.easee_home_status
+      - sensor.easee_home_dynamic_charger_limit
+      - sensor.easee_home_lifetime_energy
+      - sensor.easee_home_session_energy
+      # Renault Zoe
+      - sensor.zoe_battery
+      - sensor.zoe_plug_state
+      - sensor.zoe_charge_state
+      # Tibber
+      - sensor.sectorchan_electricity_price
+      # Package-eigene Entities
       - input_select.lade_modus
+      - input_boolean.soc_override
+      - input_number.car_target_soc
       - input_number.cheap_price_tolerance_ct
+      - binary_sensor.tibber_is_cheapest_now
       - sensor.calculated_pv_surplus
       - sensor.calculated_charge_current
       - sensor.wallbox_charge_power_kw
@@ -498,13 +525,22 @@ recorder:
       - sensor.wallbox_energy_monthly
       - sensor.wallbox_grid_cost_monthly
 
-# --- History: Graph-Ansicht im Dashboard ---
+# --- History: Graph-Ansicht (wirkt ebenfalls global) ---
 history:
   include:
     entities:
+      - sensor.rct_power_storage_grid_power
+      - sensor.rct_power_storage_battery_state_of_charge
+      - sensor.rct_power_storage_inverter_ac_power
+      - sensor.rct_power_storage_consumer_power
+      - sensor.easee_home_power
+      - sensor.easee_home_status
+      - sensor.zoe_battery
+      - sensor.sectorchan_electricity_price
       - sensor.calculated_pv_surplus
       - sensor.wallbox_charge_power_kw
       - sensor.wallbox_grid_charge_power
+      - sensor.wallbox_grid_charge_cost_rate
       - sensor.wallbox_energy_monthly
       - sensor.wallbox_grid_cost_monthly
 
@@ -513,4 +549,5 @@ logbook:
   include:
     entities:
       - input_select.lade_modus
+      - sensor.easee_home_status
       - sensor.smart_charging_status

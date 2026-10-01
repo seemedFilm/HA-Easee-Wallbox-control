@@ -1,4 +1,4 @@
-# PV-Laden Package v2.6
+# PV-Laden Package v2.6.1
 
 Home Assistant Konfiguration für das Smarte PV-Laden System (Node-RED Flow v2.6).
 
@@ -75,7 +75,7 @@ Developer Tools → YAML → Check Configuration → Restart
 - `sensor.wallbox_energy_monthly` — `utility_meter`, gesamte Wallbox-Ladeenergie pro Monat (unabhängig von PV/Netz), inkl. Vormonatswert im Attribut `last_period`
 - `sensor.wallbox_grid_cost_monthly` — `utility_meter`, Netzladekosten pro Monat (nur Netz-Anteil), inkl. Vormonatswert im Attribut `last_period`
 
-Zusätzlich enthält das Package jetzt `recorder`, `history` und `logbook`-Abschnitte für die paketeigenen Entities. Externe Entities (RCT/Easee/Zoe/Tibber) sind bewusst nicht enthalten — siehe "Externe Abhängigkeiten" unten.
+Zusätzlich enthält das Package `recorder`, `history` und `logbook`-Abschnitte. **Achtung:** `recorder: include` ist eine **globale Whitelist** für ganz Home Assistant — was dort fehlt, wird gar nicht aufgezeichnet. Deshalb stehen dort auch die externen Sensoren (RCT/Easee/Zoe/Tibber), die Flow und Dashboard-Verläufe brauchen. Wer in seiner Installation weitere Entities aufzeichnen will, muss sie dort ergänzen (oder die Abschnitte entfernen, dann zeichnet HA wieder alles auf).
 
 ### Automationen (4)
 
@@ -97,6 +97,9 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 | `sensor.zoe_*` | My Renault |
 
 ## Changelog
+
+### v2.6.1 (2026-10-01)
+- Fix: Seit v2.4 enthielt die `recorder`-/`history`-Whitelist nur noch paketeigene Entities. Da `include` global wirkt, wurden RCT-, Easee-, Zoe- und Tibber-Sensoren nach dem nächsten HA-Neustart (27.09.2026) nicht mehr aufgezeichnet → Dashboard-Verläufe zeigten nur konstante Werte. Externe Sensoren wieder aufgenommen
 
 ### v2.6 (2026-10-01)
 - Geändert: Günstigstrom-Schwelle = Tagestief + `input_number.cheap_price_tolerance_ct` (ct/kWh, Standard 3 ct) statt Tagestief × 1,15 — in `binary_sensor.tibber_is_cheapest_now`, `sensor.tibber_cheapest_now` und im Node-RED-Flow v2.6
@@ -152,5 +155,5 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ---
 
-**Version:** 2.6
+**Version:** 2.6.1
 **Kompatibilität:** Node-RED Flow v2.6, Home Assistant 2024.x+
