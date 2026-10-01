@@ -75,7 +75,7 @@ Developer Tools → YAML → Check Configuration → Restart
 - `sensor.wallbox_energy_monthly` — `utility_meter`, gesamte Wallbox-Ladeenergie pro Monat (unabhängig von PV/Netz), inkl. Vormonatswert im Attribut `last_period`
 - `sensor.wallbox_grid_cost_monthly` — `utility_meter`, Netzladekosten pro Monat (nur Netz-Anteil), inkl. Vormonatswert im Attribut `last_period`
 
-Zusätzlich enthält das Package `recorder`, `history` und `logbook`-Abschnitte. **Achtung:** `recorder: include` ist eine **globale Whitelist** für ganz Home Assistant — was dort fehlt, wird gar nicht aufgezeichnet. Deshalb stehen dort auch die externen Sensoren (RCT/Easee/Zoe/Tibber), die Flow und Dashboard-Verläufe brauchen. Wer in seiner Installation weitere Entities aufzeichnen will, muss sie dort ergänzen (oder die Abschnitte entfernen, dann zeichnet HA wieder alles auf).
+**Recorder:** Das Package setzt seit v2.7 keine `recorder`/`history`/`logbook`-Optionen mehr, weil diese global für ganz Home Assistant wirken. Ohne Filter zeichnet HA alle Entities auf, also auch die dieses Packages. Wer bereits eine Recorder-Whitelist (`recorder: include:`) nutzt, kopiert zusätzlich `pv_laden_recorder.yaml` nach `/config/packages/`. HA hängt die Entities (Package-eigene + RCT/Easee/Zoe/Tibber) dann an die bestehende Whitelist an. **Ohne eigene Whitelist diese Datei nicht installieren**, sonst wird sie selbst zur globalen Whitelist. Aufbewahrungsdauer (`purge_keep_days`) gehört in die eigene `configuration.yaml`.
 
 ### Automationen (4)
 
@@ -97,6 +97,10 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 | `sensor.zoe_*` | My Renault |
 
 ## Changelog
+
+### v2.7 (2026-10-01)
+- Geändert: Package setzt den Recorder nicht mehr global — `recorder`-, `history`- und `logbook`-Abschnitte entfernt
+- Neu: optionales Zusatz-Package `pv_laden_recorder.yaml` für Installationen mit eigener Recorder-Whitelist (wird angehängt statt global überschrieben)
 
 ### v2.6.1 (2026-10-01)
 - Fix: Seit v2.4 enthielt die `recorder`-/`history`-Whitelist nur noch paketeigene Entities. Da `include` global wirkt, wurden RCT-, Easee-, Zoe- und Tibber-Sensoren nach dem nächsten HA-Neustart (27.09.2026) nicht mehr aufgezeichnet → Dashboard-Verläufe zeigten nur konstante Werte. Externe Sensoren wieder aufgenommen

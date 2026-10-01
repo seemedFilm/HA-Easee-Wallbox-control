@@ -1,0 +1,48 @@
+# ============================================================
+# PV-Laden – optionales Recorder-Zusatz-Package (zu Package v2.7)
+#
+# NUR installieren, wenn deine Home-Assistant-Config bereits eine
+# recorder-Whitelist ("recorder: include:") verwendet!
+# HA führt Packages zusammen und hängt diese Liste an deine bestehende
+# Whitelist an. Ohne eigene Whitelist würde diese Datei selbst zur globalen
+# Whitelist und alle anderen Entities würden NICHT mehr aufgezeichnet.
+#
+# Installation: Kopiere nach /config/packages/pv_laden_recorder.yaml
+# ============================================================
+recorder:
+  include:
+    entities:
+      # RCT Wechselrichter / Speicher
+      - sensor.rct_power_storage_grid_power
+      - sensor.rct_power_storage_battery_state_of_charge
+      - sensor.rct_power_storage_battery_power
+      - sensor.rct_power_storage_inverter_ac_power
+      - sensor.rct_power_storage_consumer_power
+      # Easee Wallbox
+      - sensor.easee_home_power
+      - sensor.easee_home_status
+      - sensor.easee_home_dynamic_charger_limit
+      - sensor.easee_home_lifetime_energy
+      - sensor.easee_home_session_energy
+      # Renault Zoe
+      - sensor.zoe_battery
+      - sensor.zoe_plug_state
+      - sensor.zoe_charge_state
+      # Tibber
+      - sensor.sectorchan_electricity_price
+      # Package-eigene Entities
+      - input_select.lade_modus
+      - input_boolean.soc_override
+      - input_number.car_target_soc
+      - input_number.cheap_price_tolerance_ct
+      - binary_sensor.tibber_is_cheapest_now
+      - sensor.calculated_pv_surplus
+      - sensor.calculated_charge_current
+      - sensor.wallbox_charge_power_kw
+      - sensor.smart_charging_status
+      - sensor.tibber_cheapest_now
+      - sensor.wallbox_grid_charge_power
+      - sensor.wallbox_grid_charge_cost_rate
+      - sensor.wallbox_grid_charge_cost_total
+      - sensor.wallbox_energy_monthly
+      - sensor.wallbox_grid_cost_monthly

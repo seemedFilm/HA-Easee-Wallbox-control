@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.6** · HA Package **v2.6.1** · Dashboard **v1.8**
+**Aktueller Stand:** Node-RED Flow **v2.6** · HA Package **v2.7** · Dashboard **v1.8**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -356,6 +356,7 @@ Derzeit keine bekannten Probleme.
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
+│   ├── pv_laden_recorder.yaml                       # optional: nur bei eigener Recorder-Whitelist
 │   └── README.md                                    # Package-Dokumentation
 └── archive/                                         # Alte Flows, Packages, Dashboards, Doku v1.x
 ```
@@ -363,6 +364,9 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Package v2.7 (2026-10-01)
+- **Recorder nicht mehr global:** Das Package enthält keine `recorder`/`history`/`logbook`-Abschnitte mehr. Ohne Filter zeichnet HA alles auf. Für Installationen mit eigener Whitelist gibt es das optionale Zusatz-Package `pv_laden/pv_laden_recorder.yaml`, das seine Entities an die bestehende Whitelist anhängt
 
 ### Package v2.6.1 (2026-10-01)
 - **Fix Dashboard-Verläufe:** Die globale `recorder`-Whitelist im Package enthielt seit v2.4 keine externen Sensoren mehr (RCT/Easee/Zoe/Tibber) → ab 27.09.2026 keine Historie, Charts zeigten konstante Werte. Wieder aufgenommen
