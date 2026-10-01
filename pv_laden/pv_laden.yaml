@@ -1,9 +1,12 @@
 # ============================================================
-# PV-Laden Package v2.5.2
+# PV-Laden Package v2.6
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.5 (v2.4 kompatibel)
+# Voraussetzung: Node-RED Flow v2.6
+#
+# v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
+#   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
 #
 # v2.5 (2026-09-24): Konsolidiert — v2.4 + Dashboard-Helfer aus v1.7
 #   (system_enabled, min_surplus_*, hysteresis_time, max_grid_power_draw,
@@ -122,6 +125,17 @@ input_number:
     unit_of_measurement: min
     mode: slider
     initial: 10
+
+  # v2.6: Günstigstrom-Schwelle = Tagestief + diese Toleranz (ct/kWh).
+  # Ohne "initial", damit der eingestellte Wert Neustarts übersteht.
+  cheap_price_tolerance_ct:
+    name: Günstigstrom-Toleranz über Tagestief
+    icon: mdi:cash-plus
+    min: 0
+    max: 15
+    step: 0.5
+    unit_of_measurement: ct/kWh
+    mode: slider
 
   # Legacy (v1.7) — nur Dashboard, vom Flow (ab v2.4) nicht ausgewertet
   min_surplus_to_start:
@@ -262,7 +276,7 @@ template:
         state: >
           {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
           {% set min_price = state_attr('sensor.sectorchan_electricity_price', 'min_price') | float(0) %}
-          {% set threshold = min_price * 1.15 %}
+          {% set threshold = min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100 %}
           {{ (price * 100) | round(1) }} / {{ (threshold * 100) | round(1) }} ct/kWh
 
       - name: "Smart Charging Status"
@@ -283,7 +297,7 @@ template:
           {% elif car_soc >= target_soc and override %}Lädt über {{ target_soc | int }}% hinaus (Override aktiv, {{ states('sensor.calculated_charge_current') }}A)
           {% elif mode == 'laden' %}Laden erzwungen ({{ states('input_number.max_charge_current') | int }}A)
           {% elif mode == 'günstigster_strom' and cheap %}Günstigster Strom aktiv ({{ states('input_number.max_charge_current') | int }}A)
-          {% elif mode == 'günstigster_strom' %}Warte auf Tagestief-Strompreis
+          {% elif mode == 'günstigster_strom' %}Warte auf Tagestief-Strompreis (+{{ states('input_number.cheap_price_tolerance_ct') | float(3) }} ct)
           {% elif cheap and mode == 'automatik' and is_state('input_boolean.tibber_enabled', 'on') %}Günstigstrom-Fallback ({{ states('input_number.max_charge_current') | int }}A)
           {% elif charging %}Lädt ({{ states('sensor.calculated_charge_current') }}A)
           {% else %}Bereit (warte auf Überschuss)
@@ -324,7 +338,8 @@ template:
         state: >
           {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
           {% set min_price = state_attr('sensor.sectorchan_electricity_price', 'min_price') | float(0) %}
-          {{ price > 0 and price <= (min_price * 1.15) }}
+          {% set threshold = min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100 %}
+          {{ price > 0 and price <= threshold }}
 
       - name: "Battery SOC Above Minimum"
         unique_id: battery_soc_above_minimum
@@ -471,6 +486,7 @@ recorder:
   include:
     entities:
       - input_select.lade_modus
+      - input_number.cheap_price_tolerance_ct
       - sensor.calculated_pv_surplus
       - sensor.calculated_charge_current
       - sensor.wallbox_charge_power_kw

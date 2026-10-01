@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.5** · HA Package **v2.5.2** · Dashboard **v1.7**
+**Aktueller Stand:** Node-RED Flow **v2.6** · HA Package **v2.6** · Dashboard **v1.8**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -12,7 +12,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.5_2026-09-26.json`](smartes_pv_laden_flow_v2.5_2026-09-26.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`smartes_pv_laden_flow_v2.6_2026-10-01.json`](smartes_pv_laden_flow_v2.6_2026-10-01.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -29,7 +29,7 @@ Das System kennt 5 Modi, steuerbar über `input_select.lade_modus`. Das Auto-Zie
 Der Standardmodus für den täglichen Betrieb — kombiniert die beiden anderen Automatik-Strategien.
 
 - **Priorität 1 — PV-Überschuss:** Dynamische Stromregelung (7–32A) basierend auf verfügbarer Einspeisung, startet ab **3600W** Überschuss
-- **Priorität 2 — Günstigster Strom (Fallback):** Reicht der PV-Überschuss nicht und ist `tibber_enabled = on`, prüft das System den aktuellen Strompreis. Ist er ≤ Tagesminimum + 15%, wird trotzdem mit `max_charge_current` geladen (PV + Netz)
+- **Priorität 2 — Günstigster Strom (Fallback):** Reicht der PV-Überschuss nicht und ist `tibber_enabled = on`, prüft das System den aktuellen Strompreis. Ist er ≤ Tagesminimum + Toleranz (`cheap_price_tolerance_ct`, Standard 3 ct), wird trotzdem mit `max_charge_current` geladen (PV + Netz)
 - **Wolken-Überbrückung:** Bricht der Überschuss kurzzeitig ein (z. B. Wolke) und greift kein Preis-Fallback, wird bis zu `bridge_max_minutes` (Standard 10 min) mit Minimalstrom weitergeladen statt sofort zu stoppen
 - Batterie-Priorität wird respektiert (Hausbatterie erst auf 95%, dann Auto)
 - Auto-Ziel-SOC per `soc_override` überbrückbar (wie alle anderen Modi)
@@ -58,7 +58,7 @@ Strenger als Automatik — ausschließlich direkter Solarstrom, ohne Preis-Fallb
 Lädt unabhängig von PV-Erzeugung rein preisgetrieben aus dem Netz.
 
 - Ermittelt laufend den günstigsten Strompreis des Tages über das `min_price`-Attribut von `sensor.sectorchan_electricity_price`
-- Lädt mit `max_charge_current`, sobald der aktuelle Preis ≤ Tagesminimum + 15% liegt, sonst wird gewartet (kein Netzbezug)
+- Lädt mit `max_charge_current`, sobald der aktuelle Preis ≤ Tagesminimum + `cheap_price_tolerance_ct` (Standard 3 ct) liegt, sonst wird gewartet (kein Netzbezug)
 - Auto-Ziel-SOC per SOC-Override umgehbar
 - Funktioniert unabhängig vom Schalter `tibber_enabled` (der steuert nur den Fallback *innerhalb* von Automatik)
 
@@ -105,6 +105,7 @@ Alle Parameter werden live aus Home Assistant gelesen und sofort wirksam.
 | `phases` | 3 | 1–3 | Anzahl der genutzten Phasen |
 | `min_battery_soc` | 95% | 50–100% | Haus-Batterie erst auf diesen SOC laden, bevor Auto dran ist |
 | `car_target_soc` | 80% | 50–80% | Auto-Ziel-SOC, in allen Modi per `soc_override` überbrückbar |
+| `cheap_price_tolerance_ct` | 3 ct | 0–15 ct | Toleranz über dem Tagestief, bis zu der Strom als „günstig“ gilt (Modus Günstigster Strom + Automatik-Fallback) |
 | `bridge_max_minutes` | 10 min | 1–30 min | Max. Dauer der Wolken-Überbrückung (Automatik + Nur PV-Überschuss) |
 | `soc_override_max_duration` | 240 min | 0–720 min | `soc_override` wird nach dieser Zeit automatisch zurückgesetzt (0 = nie) |
 
@@ -131,10 +132,12 @@ Alle Parameter werden live aus Home Assistant gelesen und sofort wirksam.
 
 **Berechnung:**
 - Tagesminimum wird laufend aus dem `min_price`-Attribut von `sensor.sectorchan_electricity_price` gelesen
-- Schwelle = Tagesminimum × 1,15 (günstigster Preis des Tages + 15% Toleranz)
+- Schwelle = Tagesminimum + `input_number.cheap_price_tolerance_ct` (feste Toleranz in ct/kWh, Standard 3 ct, im Dashboard einstellbar)
 - Wenn aktueller Preis ≤ Schwelle → günstig → Wallbox auf `max_charge_current`
 
-**Beispiel:** Tagesminimum 15,3 ct → Schwelle 17,6 ct → günstig solange Preis ≤ 17,6 ct
+**Beispiel:** Tagesminimum 15,3 ct + 3 ct → Schwelle 18,3 ct → günstig solange Preis ≤ 18,3 ct
+
+**Warum Cent statt Prozent (seit v2.6):** Eine prozentuale Toleranz wird bei teuren Tagen breiter und bei billigen Tagen schmaler (15 % = 2,3 ct bei 15 ct, aber 4,3 ct bei 29 ct). Eine feste Toleranz bedeutet immer denselben Aufpreis pro kWh. Auswertung der Tibber-15-Minuten-Preise (21.–30.09.2026): Das Fenster liegt praktisch immer zwischen ca. 11:30 und 15:30 Uhr; +3 ct ergibt im Schnitt ~3,1 h pro Tag in meist einem zusammenhängenden Block, +4 ct ~3,8 h, zerfällt aber häufiger in mehrere Blöcke (Wallbox stoppt/startet dazwischen).
 
 **Sensor:** `sensor.sectorchan_electricity_price` (Tibber Integration mit Pulse)
 
@@ -191,10 +194,10 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 4. Modus = Laden erzwingen?                            → CHARGE mit max_charge_current
 5. Batterie-Priorität aktiv UND Haus-SOC < min_battery_soc? → STOP
 6. Modus = Günstigster Strom?
-   - Preis ≤ Tagestief + 15%                            → CHARGE mit max_charge_current
+   - Preis ≤ Tagestief + Toleranz (ct)                  → CHARGE mit max_charge_current
    - Sonst                                              → STOP/HOLD (warten auf Tagestief)
 7. PV-Überschuss ≥ 3600W?                               → CHARGE mit berechnetem Strom
-8. Modus = Automatik UND tibber_enabled UND Preis ≤ Tagestief + 15%? → CHARGE mit max_charge_current (Fallback)
+8. Modus = Automatik UND tibber_enabled UND Preis ≤ Tagestief + Toleranz (ct)? → CHARGE mit max_charge_current (Fallback)
 9. Überschuss < 3600W UND bereits am Laden?
    - Modus = Automatik/Überschuss: Wolken-Überbrückung starten/fortsetzen (max. bridge_max_minutes mit min_charge_current)
    - Nach Ablauf der Überbrückung                       → STOP
@@ -241,7 +244,7 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.5_2026-09-26.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.6_2026-10-01.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
 4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
@@ -349,7 +352,7 @@ Derzeit keine bekannten Probleme.
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.5_2026-09-26.json       # Node-RED Flow (aktuell)
+├── smartes_pv_laden_flow_v2.6_2026-10-01.json       # Node-RED Flow (aktuell)
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -360,6 +363,10 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Flow v2.6 / Package v2.6 / Dashboard v1.8 (2026-10-01)
+- **Günstigstrom-Schwelle in Cent statt Prozent:** Schwelle = Tagestief + `input_number.cheap_price_tolerance_ct` (Standard 3 ct, 0–15 ct) statt Tagestief × 1,15. Gilt für den Modus „Günstigster Strom“, den Automatik-Fallback, `binary_sensor.tibber_is_cheapest_now` und `sensor.tibber_cheapest_now`
+- Dashboard: Sektion „Günstigstrom (Tibber)“ in der System-Konfiguration, neue Karte in den Einstellungen, Lade-Modus-Kachel zeigt im Modus „Günstigster Strom“ Preis / Schwelle
 
 ### Flow v2.5 (2026-09-26)
 - **Fix Automatik / Nur PV-Überschuss:** `sensor.easee_home_power` liefert kW, der Flow rechnete mit W. Während einer PV-Ladung wurde dadurch nur ~15 statt ~15000 W zum Überschuss addiert → der Überschuss fiel unter die Startschwelle (3600 W), der Flow ging in die Wolken-Überbrückung (Minimalstrom) und **stoppte nach `bridge_max_minutes`**. Die Leistung wird jetzt anhand der Einheit in W umgerechnet.

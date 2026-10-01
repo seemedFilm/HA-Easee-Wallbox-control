@@ -1,4 +1,4 @@
-# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.7
+# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.8
 #
 # Installation:
 # 1. Settings → Dashboards → "+ Add Dashboard"
@@ -9,6 +9,11 @@
 # 6. Diesen YAML-Code einfügen
 #
 # ===== REVISIONSHISTORIE =====
+# v1.8 (2026-10-01): Günstigstrom-Schwelle in ct statt % (Package/Flow v2.6):
+#   - Neue Sektion "Günstigstrom (Tibber)" in der System-Konfiguration und neue
+#     Karte in den Einstellungen (input_number.cheap_price_tolerance_ct,
+#     input_boolean.tibber_enabled, sensor.tibber_cheapest_now)
+#   - Lade-Modus-Kachel zeigt im Modus "Günstigster Strom" Preis / Schwelle
 # v1.7 (2026-09-21): Kosten-Update integriert (siehe home-assistant-configuration.yaml,
 #   Abschnitt "MONATSAUSWERTUNG WALLBOX-LADEN"):
 #   - Neue Badge "Netzladekosten (Monat)" in der Übersicht
@@ -105,7 +110,7 @@ views:
               {% elif states('input_select.lade_modus') == 'stoppen' %}
                 🛑 Gestoppt
               {% elif states('input_select.lade_modus') == 'günstigster_strom' %}
-                💶 Günstigster Strom
+                💶 {{ states('sensor.tibber_cheapest_now') }}
               {% else %}
                 ☀️ Nur PV
               {% endif %}
@@ -521,6 +526,21 @@ views:
             name: Auto-Reset nach
             icon: mdi:timer-alert
 
+          - type: section
+            label: Günstigstrom (Tibber)
+
+          - entity: sensor.tibber_cheapest_now
+            name: Preis / Schwelle
+            icon: mdi:cash
+
+          - entity: input_number.cheap_price_tolerance_ct
+            name: Toleranz über Tagestief
+            icon: mdi:cash-plus
+
+          - entity: input_boolean.tibber_enabled
+            name: Günstigstrom-Fallback in Automatik
+            icon: mdi:cash
+
   # ===== ZWEITE ANSICHT: HISTORIE & CHARTS =====
   - title: Verlauf
     path: history
@@ -740,6 +760,22 @@ views:
 
           - entity: input_number.soc_override_max_duration
             name: Auto-Reset nach (Minuten, 0 = aus)
+
+      - type: entities
+        title: Günstigstrom (Tibber)
+        show_header_toggle: false
+        entities:
+          - entity: input_number.cheap_price_tolerance_ct
+            name: Toleranz über Tagestief (ct/kWh)
+
+          - entity: input_boolean.tibber_enabled
+            name: Günstigstrom-Fallback in Automatik
+
+          - entity: sensor.tibber_cheapest_now
+            name: Aktueller Preis / Schwelle
+
+          - entity: binary_sensor.tibber_is_cheapest_now
+            name: Gerade günstig
 
       # Schwellenwerte
       - type: entities

@@ -1,6 +1,6 @@
-# PV-Laden Package v2.5.2
+# PV-Laden Package v2.6
 
-Home Assistant Konfiguration für das Smarte PV-Laden System (Node-RED Flow v2.5).
+Home Assistant Konfiguration für das Smarte PV-Laden System (Node-RED Flow v2.6).
 
 ## Dateistruktur
 
@@ -30,7 +30,7 @@ Developer Tools → YAML → Check Configuration → Restart
 
 ## Enthaltene Entities
 
-### Input Helpers (11 Stück)
+### Input Helpers (12 Stück)
 
 **Input Select (1):**
 - `input_select.lade_modus` — automatik / laden / stoppen / überschuss / günstigster_strom
@@ -41,13 +41,14 @@ Developer Tools → YAML → Check Configuration → Restart
 - `input_boolean.soc_override` — Auto-Ziel-SOC überbrücken. Gilt jetzt einheitlich für **alle** Modi (auch Automatik). Persistent — wird automatisch zurückgesetzt bei Ausstecken oder nach `soc_override_max_duration` (siehe Automationen).
 - `input_boolean.tibber_enabled` — Günstigstrom-Fallback **innerhalb von Automatik**, wenn PV-Überschuss nicht reicht. Der eigenständige Modus "günstigster_strom" funktioniert unabhängig von diesem Schalter.
 
-**Input Number (7):**
+**Input Number (8):**
 - `input_number.min_charge_current` — Min. Ladestrom (Standard: 7A)
 - `input_number.max_charge_current` — Max. Ladestrom (Standard: 32A)
 - `input_number.phases` — Phasen (Standard: 3)
 - `input_number.min_battery_soc` — Min. Batterie-SOC für Priorität (Standard: 95%)
 - `input_number.car_target_soc` — Auto-Ziel-SOC (Standard: 80%), in allen Modi per `soc_override` überbrückbar
 - `input_number.soc_override_max_duration` — Auto-Reset für `soc_override` nach X Minuten (Standard: 240 min, 0 = deaktiviert)
+- `input_number.cheap_price_tolerance_ct` — Günstigstrom-Toleranz über dem Tagestief in ct/kWh (Standard: 3 ct, 0–15 ct). Ohne `initial`, der eingestellte Wert bleibt über Neustarts erhalten
 - `input_number.bridge_max_minutes` — Max. Dauer der Wolken-Überbrückung in Automatik/PV-Überschuss (Standard: 10 min)
 
 ### Template Sensoren
@@ -58,11 +59,11 @@ Developer Tools → YAML → Check Configuration → Restart
 - `sensor.wallbox_charge_power_kw` — Wallbox-Leistung (kW)
 - `sensor.battery_flow_direction` — Batterie: Laden/Entladen/Ruhend
 - `sensor.grid_flow_direction` — Netz: Einspeisung/Bezug/Neutral
-- `sensor.tibber_cheapest_now` — Aktueller vs. Schwellen-Preis
+- `sensor.tibber_cheapest_now` — Aktueller Preis / Schwelle (Tagestief + Toleranz) in ct/kWh
 - `sensor.smart_charging_status` — System-Status-Text
 
 **Binary Sensoren (3):**
-- `binary_sensor.tibber_is_cheapest_now` — Strom gerade günstig?
+- `binary_sensor.tibber_is_cheapest_now` — Strom gerade günstig? (Preis ≤ Tagestief + `cheap_price_tolerance_ct`)
 - `binary_sensor.battery_soc_above_minimum` — Batterie über Minimum?
 - `binary_sensor.car_soc_below_target` — Auto unter Ziel-SOC?
 
@@ -96,6 +97,11 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 | `sensor.zoe_*` | My Renault |
 
 ## Changelog
+
+### v2.6 (2026-10-01)
+- Geändert: Günstigstrom-Schwelle = Tagestief + `input_number.cheap_price_tolerance_ct` (ct/kWh, Standard 3 ct) statt Tagestief × 1,15 — in `binary_sensor.tibber_is_cheapest_now`, `sensor.tibber_cheapest_now` und im Node-RED-Flow v2.6
+- Neu: `input_number.cheap_price_tolerance_ct` (auch im Recorder)
+- `sensor.smart_charging_status` zeigt im Modus „günstigster_strom“ die Toleranz an
 
 ### v2.5.2 (2026-09-26)
 - Fix: Benachrichtigungen nutzten `notify.mobile_app` (existiert nicht) → jetzt `notify.mobile_app_sm_s938b`. **Für andere Installationen auf den eigenen Dienst anpassen** (Entwicklerwerkzeuge → Aktionen → `notify.`)
@@ -146,5 +152,5 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ---
 
-**Version:** 2.4
-**Kompatibilität:** Node-RED Flow v2.5 (v2.4 kompatibel), Home Assistant 2024.x+
+**Version:** 2.6
+**Kompatibilität:** Node-RED Flow v2.6, Home Assistant 2024.x+
