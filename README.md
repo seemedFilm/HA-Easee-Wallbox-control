@@ -12,8 +12,8 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.6_2026-10-01.json`](smartes_pv_laden_flow_v2.6_2026-10-01.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
-| [`wallbox_telegram_flow_v1.1_2026-10-02.json`](wallbox_telegram_flow_v1.1_2026-10-02.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
+| [`smartes_pv_laden_flow_v2.7_2026-10-02.json`](smartes_pv_laden_flow_v2.7_2026-10-02.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`wallbox_telegram_flow_v1.3_2026-10-02.json`](wallbox_telegram_flow_v1.3_2026-10-02.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -23,7 +23,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 ## Betriebsmodi
 
-Das System kennt 5 Modi, steuerbar über `input_select.lade_modus`. Das Auto-Ziel-SOC (Standard 80%) gilt in **allen** Modi identisch und ist per `soc_override`-Schalter überbrückbar — es gibt kein separates Hard-Limit mehr.
+Das System kennt 5 Modi, steuerbar über `input_select.lade_modus`. Das Auto-Ziel-SOC (Standard 80%) gilt in **allen** Modi identisch. Ohne SOC-Override ist es auf höchstens 80 % begrenzt. Mit `soc_override` lädt das Auto entweder bis zu einem Ziel über 80 % (z. B. 90 %) oder, bei einem Ziel ≤ 80 %, ohne Grenze bis voll.
 
 ### Automatik (empfohlen)
 
@@ -105,7 +105,7 @@ Alle Parameter werden live aus Home Assistant gelesen und sofort wirksam.
 | `max_charge_current` | 32A | 6–32A | Maximaler Ladestrom (= 22 kW bei 3 Phasen), auch fester Wert für "Laden erzwingen" und "Günstigster Strom" |
 | `phases` | 3 | 1–3 | Anzahl der genutzten Phasen |
 | `min_battery_soc` | 95% | 50–100% | Haus-Batterie erst auf diesen SOC laden, bevor Auto dran ist |
-| `car_target_soc` | 80% | 50–80% | Auto-Ziel-SOC, in allen Modi per `soc_override` überbrückbar |
+| `car_target_soc` | 80% | 50–100% | Auto-Ziel-SOC. Über 80 % nur mit `soc_override` (sonst automatisch auf 80 % zurückgesetzt) |
 | `cheap_price_tolerance_ct` | 3 ct | 0–15 ct | Toleranz über dem Tagestief, bis zu der Strom als „günstig“ gilt (Modus Günstigster Strom + Automatik-Fallback) |
 | `bridge_max_minutes` | 10 min | 1–30 min | Max. Dauer der Wolken-Überbrückung (Automatik + Nur PV-Überschuss) |
 | `soc_override_max_duration` | 240 min | 0–720 min | `soc_override` wird nach dieser Zeit automatisch zurückgesetzt (0 = nie) |
@@ -191,7 +191,8 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ```
 1. Modus = Stoppen?                                    → STOP
 2. Auto angeschlossen?                                 → Nein: STOP
-3. Auto-SOC ≥ Ziel-SOC UND SOC-Override AUS?            → STOP (gilt für ALLE Modi)
+3. Auto-SOC ≥ Ziel-SOC (ohne Override max. 80 %)?       → STOP (gilt für ALLE Modi)
+   Mit Override: STOP nur bei Ziel > 80 % und Auto-SOC ≥ Ziel
 4. Modus = Laden erzwingen?                            → CHARGE mit max_charge_current
 5. Batterie-Priorität aktiv UND Haus-SOC < min_battery_soc? → STOP
 6. Modus = Günstigster Strom?
@@ -245,7 +246,7 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.6_2026-10-01.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.7_2026-10-02.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
 4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
@@ -260,7 +261,7 @@ enableGlobalContextStore: true
 Steuert die Wallbox per Telegram-Bot: `/wallbox` schickt Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, Aktualisieren). Die Buttons setzen nur die HA-Helfer (`input_select.lade_modus`, `input_boolean.soc_override`, `input_number.car_target_soc`) — die eigentliche Steuerung macht weiterhin der PV-Laden-Flow.
 
 1. Palette `node-red-contrib-telegrambot` installieren und einen Bot-Config-Node anlegen (Token von @BotFather, unter *Users/ChatIds* nur die eigenen Chat-IDs freigeben).
-2. Menü → Import → `wallbox_telegram_flow_v1.1_2026-10-02.json` → *Import to: new flow*.
+2. Menü → Import → `wallbox_telegram_flow_v1.3_2026-10-02.json` → *Import to: new flow*.
 3. In den Telegram-Nodes (`/wallbox`, *Button gedrückt*, *senden*) den eigenen Bot wählen, im Node *HA-Helfer setzen* den Home-Assistant-Server.
 4. Deploy, dann im Chat `/wallbox` senden.
 
@@ -362,8 +363,8 @@ Derzeit keine bekannten Probleme.
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.6_2026-10-01.json       # Node-RED Flow (aktuell)
-├── wallbox_telegram_flow_v1.1_2026-10-02.json       # optional: Telegram-Menü /wallbox
+├── smartes_pv_laden_flow_v2.7_2026-10-02.json       # Node-RED Flow (aktuell)
+├── wallbox_telegram_flow_v1.3_2026-10-02.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -375,6 +376,11 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Flow v2.7 / Package v2.8 / Telegram-Menü v1.3 (2026-10-02)
+- **Ziel-SOC über 80 % mit SOC-Override:** `input_number.car_target_soc` geht jetzt bis 100 %. Mit Override und Ziel > 80 % lädt der Flow bis zum Ziel und stoppt dort, mit Override und Ziel ≤ 80 % wie bisher ohne Grenze
+- **Ohne Override höchstens 80 %:** Neue Automation `clamp_car_target_soc` setzt ein höheres Ziel auf 80 % zurück, auch wenn der Override ausgeschaltet wird (manuell, beim Ausstecken oder per Timeout)
+- **Telegram:** Ziel ±5 % mit aktuellem Wert in der Mitte, „(max)“/„(min)“ an der Grenze; +5 % bis 80 %, mit Override bis 100 %. Hinweis an der Grenze als Dialog. „message is not modified“-Fehler werden wieder ausgefiltert
 
 ### Telegram-Menü v1.1 (2026-10-02)
 - **Neu im Repo:** Node-RED-Tab „Wallbox Telegram“ (`/wallbox`), seit v1.0 (2026-10-01) im Einsatz

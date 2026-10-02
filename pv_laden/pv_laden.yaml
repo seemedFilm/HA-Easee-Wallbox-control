@@ -1,14 +1,17 @@
 # ============================================================
-# PV-Laden Package v2.7
+# PV-Laden Package v2.8
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.6
+# Voraussetzung: Node-RED Flow v2.7
 #
 # v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
 #   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
 # v2.6.1 (2026-10-01): Recorder/History wieder inkl. externer Sensoren (RCT/Easee/
 #   Zoe/Tibber) – die globale include-Whitelist hatte deren Aufzeichnung gestoppt.
+# v2.8 (2026-10-02): Ziel-SOC bis 100 % einstellbar, aber nur mit SOC-Override.
+#   Ohne Override wird ein Ziel > 80 % automatisch auf 80 % zurückgesetzt
+#   (auch beim Ausschalten des Overrides). Override + Ziel > 80 % lädt bis zum Ziel.
 # v2.7 (2026-10-01): Package setzt den Recorder nicht mehr global. Keine
 #   recorder/history/logbook-Abschnitte mehr; für Installationen mit Whitelist
 #   gibt es das optionale Zusatz-Package pv_laden_recorder.yaml.
@@ -105,7 +108,7 @@ input_number:
     name: Auto-Ziel-SOC (Hard-Limit)
     icon: mdi:battery-80
     min: 50
-    max: 80
+    max: 100   # > 80 % nur mit SOC-Override (Automation clamp_car_target_soc)
     step: 5
     unit_of_measurement: "%"
     mode: slider
@@ -298,6 +301,7 @@ template:
           {% if not plugged %}Warte auf Auto-Anschluss
           {% elif mode == 'stoppen' %}Manuell gestoppt
           {% elif car_soc >= target_soc and not override %}Auto-SOC Limit ({{ target_soc | int }}%) – Override erforderlich zum Weiterladen
+          {% elif car_soc >= target_soc and target_soc > 80 %}Ziel {{ target_soc | int }}% erreicht (Override)
           {% elif car_soc >= target_soc and override and mode == 'laden' %}Laden erzwungen (ÜBER {{ target_soc | int }}%!, {{ states('input_number.max_charge_current') | int }}A)
           {% elif car_soc >= target_soc and override %}Lädt über {{ target_soc | int }}% hinaus (Override aktiv, {{ states('sensor.calculated_charge_current') }}A)
           {% elif mode == 'laden' %}Laden erzwungen ({{ states('input_number.max_charge_current') | int }}A)
@@ -409,6 +413,31 @@ automation:
           message: >
             ⚠️ Renault Zoe lädt über 80% hinaus ({{ states('sensor.zoe_battery') }}%),
             da SOC-Override aktiv ist.
+
+  - id: clamp_car_target_soc
+    alias: "PV-Laden: Ziel-SOC ohne Override auf 80% begrenzen"
+    description: "Ziel-SOC über 80 % ist nur bei aktivem SOC-Override erlaubt."
+    trigger:
+      - platform: state
+        entity_id: input_number.car_target_soc
+      - platform: state
+        entity_id: input_boolean.soc_override
+        to: "off"
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: input_boolean.soc_override
+        state: "off"
+      - condition: numeric_state
+        entity_id: input_number.car_target_soc
+        above: 80
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.car_target_soc
+        data:
+          value: 80
 
   - id: reset_soc_override_on_unplug
     alias: "PV-Laden: SOC-Override bei Ausstecken zurücksetzen"

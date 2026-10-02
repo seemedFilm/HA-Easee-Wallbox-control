@@ -1,0 +1,236 @@
+[
+    {
+        "id": "875927071fb5a326",
+        "type": "tab",
+        "label": "Wallbox Telegram",
+        "disabled": false,
+        "info": "Telegram-Menü für die Wallbox über den bestehenden Bot (Config-Node 'telegram bot').\n/wallbox -> Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, Aktualisieren).\nButtons setzen nur die HA-Helfer (input_select.lade_modus, input_boolean.soc_override, input_number.car_target_soc); die eigentliche Steuerung macht der Tab 'Smartes PV-Laden'.\nZugriff: nur die im Bot-Config-Node freigegebenen Chat-IDs.\nv1.1 (2026-10-02): Menü ohne Emojis, aktiver Modus hervorgehoben.\nv1.2 (2026-10-02): Ziel-SOC-Zeile mit aktuellem Wert und min/max-Kennzeichnung, Hinweis an der Grenze als Dialog; \"not modified\"-Fehler werden wieder ausgefiltert.\nv1.3 (2026-10-02): Ziel-SOC +5 % bis 80 %, mit SOC-Override bis 100 % (benötigt Flow v2.7 / Package v2.8)."
+    },
+    {
+        "id": "d84f2fd129e9b9fe",
+        "type": "comment",
+        "z": "875927071fb5a326",
+        "name": "Wallbox Telegram v1.3 (2026-10-02) – /wallbox",
+        "info": "Telegram-Menü für die Wallbox über den bestehenden Bot (Config-Node 'telegram bot').\n/wallbox -> Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, Aktualisieren).\nButtons setzen nur die HA-Helfer (input_select.lade_modus, input_boolean.soc_override, input_number.car_target_soc); die eigentliche Steuerung macht der Tab 'Smartes PV-Laden'.\nZugriff: nur die im Bot-Config-Node freigegebenen Chat-IDs.\nv1.1 (2026-10-02): Menü ohne Emojis, aktiver Modus hervorgehoben.\nv1.2 (2026-10-02): Ziel-SOC-Zeile mit aktuellem Wert und min/max-Kennzeichnung, Hinweis an der Grenze als Dialog; \"not modified\"-Fehler werden wieder ausgefiltert.\nv1.3 (2026-10-02): Ziel-SOC +5 % bis 80 %, mit SOC-Override bis 100 % (benötigt Flow v2.7 / Package v2.8).",
+        "x": 220,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "20d5d92cbe20242b",
+        "type": "telegram command",
+        "z": "875927071fb5a326",
+        "name": "/wallbox",
+        "command": "/wallbox",
+        "description": "Wallbox-Menü",
+        "registercommand": false,
+        "language": "",
+        "bot": "c3670dce.18aa8",
+        "strict": false,
+        "hasresponse": false,
+        "useregex": false,
+        "removeregexcommand": false,
+        "outputs": 1,
+        "x": 130,
+        "y": 100,
+        "wires": [
+            [
+                "8a80501109e6b620"
+            ]
+        ]
+    },
+    {
+        "id": "9898155640833f14",
+        "type": "telegram event",
+        "z": "875927071fb5a326",
+        "name": "Button gedrückt",
+        "bot": "c3670dce.18aa8",
+        "event": "callback_query",
+        "autoanswer": false,
+        "x": 140,
+        "y": 180,
+        "wires": [
+            [
+                "84de9b192dd7d0d6"
+            ]
+        ]
+    },
+    {
+        "id": "84de9b192dd7d0d6",
+        "type": "function",
+        "z": "875927071fb5a326",
+        "name": "Button auswerten",
+        "func": "// Wertet Button-Klicks (callback_data \"wb:...\") aus. Andere Callbacks (alte Menüs) werden ignoriert.\n// Ausgang 1: HA-Aktion, Ausgang 2: Menü aktualisieren (nach kurzer Verzögerung),\n// Ausgang 3: sofortige Rückmeldung als Telegram-Popup (answerCallbackQuery)\nconst data = String(msg.payload.content || '');\nif (!data.startsWith('wb:')) return null;\n\nconst S = ((global.get('homeassistant') || {}).homeAssistant || {}).states || {};\nconst [, cmd, arg] = data.split(':');\nconst MODES = { 'automatik': 'Automatik', 'überschuss': 'Nur PV', 'günstigster_strom': 'Günstigster Strom', 'laden': 'Laden', 'stoppen': 'Stopp' };\nconst plugged = ['plugged', 'Plugged in'].includes((S['sensor.zoe_plug_state'] || {}).state);\nlet call = null;\nlet info = 'Aktualisiert';\nlet alert = false;\n\nif (cmd === 'm' && MODES[arg]) {\n    call = { action: 'input_select.select_option', target: { entity_id: ['input_select.lade_modus'] }, data: { option: arg } };\n    info = 'Modus: ' + MODES[arg] + (plugged ? '' : '\\n(Auto nicht angesteckt – Wallbox wartet)');\n} else if (cmd === 'o') {\n    const on = (S['input_boolean.soc_override'] || {}).state === 'on';\n    call = { action: 'input_boolean.toggle', target: { entity_id: ['input_boolean.soc_override'] }, data: {} };\n    info = on ? 'SOC-Override AUS' : 'SOC-Override AN';\n} else if (cmd === 't') {\n    const cur = parseFloat((S['input_number.car_target_soc'] || {}).state) || 80;\n    // Über 80 % nur mit SOC-Override (HA-Automation clamp_car_target_soc setzt sonst zurück)\n    const over = (S['input_boolean.soc_override'] || {}).state === 'on';\n    const max = over ? 100 : 80;\n    const value = Math.max(50, Math.min(max, cur + (parseFloat(arg) || 0)));\n    if (value !== cur) call = { action: 'input_number.set_value', target: { entity_id: ['input_number.car_target_soc'] }, data: { value: value } };\n    else alert = true;\n    info = value !== cur ? 'Ziel-SOC: ' + cur + ' → ' + value + ' %'\n        : value >= 80 && !over ? 'Ziel-SOC bleibt 80 %. Über 80 % geht nur mit eingeschaltetem SOC-Override.'\n        : 'Ziel-SOC bleibt ' + cur + ' % – erlaubt sind 50–' + max + ' %.';\n    node.warn('Ziel-SOC ' + data + ': ' + cur + ' -> ' + value + (call ? ' (setze)' : ' (Grenze)'));\n}\n\nif (call) node.status({ fill: 'blue', shape: 'dot', text: data + ' ' + new Date().toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin' }) });\nconst refresh = { wb: { chatId: msg.payload.chatId, messageId: msg.payload.messageId }, payload: {} };\nconst answer = { payload: { chatId: msg.payload.chatId, type: 'answerCallbackQuery', callbackQueryId: msg.payload.callbackQueryId, content: info, options: { show_alert: alert } } };\nreturn [call ? { payload: call } : null, refresh, answer];\n",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 350,
+        "y": 180,
+        "wires": [
+            [
+                "de6ee62e364ac76c"
+            ],
+            [
+                "89df059ecad80c49"
+            ],
+            [
+                "4298b510af8845f4"
+            ]
+        ]
+    },
+    {
+        "id": "de6ee62e364ac76c",
+        "type": "api-call-service",
+        "z": "875927071fb5a326",
+        "name": "HA-Helfer setzen",
+        "server": "de3d7b96.f180b8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "",
+        "service": "",
+        "x": 580,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "89df059ecad80c49",
+        "type": "delay",
+        "z": "875927071fb5a326",
+        "name": "HA-State abwarten",
+        "pauseType": "delay",
+        "timeout": "1500",
+        "timeoutUnits": "milliseconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 580,
+        "y": 220,
+        "wires": [
+            [
+                "8a80501109e6b620"
+            ]
+        ]
+    },
+    {
+        "id": "8a80501109e6b620",
+        "type": "function",
+        "z": "875927071fb5a326",
+        "name": "Menü bauen",
+        "func": "// Baut Status-Text + Inline-Keyboard. Neue Nachricht (/wallbox) oder Bearbeiten der bestehenden (Button).\n// v1.3: +5 % bis 80 %, mit SOC-Override bis 100 % (Flow v2.7 lädt dann bis zum Ziel).\n// v1.2: Ziel-SOC-Zeile zeigt aktuellen Wert, Grenzen (min/max) an den Buttons.\n// v1.1: Emojis entfernt; aktiver Modus fett/groß im Text und als einziger markierter Button (▶ … ◀).\nconst S = ((global.get('homeassistant') || {}).homeAssistant || {}).states || {};\nconst st = id => (S[id] || {}).state;\nconst num = id => { const v = parseFloat(st(id)); return isNaN(v) ? null : v; };\nconst esc = s => String(s == null ? '–' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fmt = (v, d = 0) => v == null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });\n\nconst MODES = {\n    'automatik': 'Automatik',\n    'überschuss': 'Nur PV',\n    'günstigster_strom': 'Günstigster Strom',\n    'laden': 'Laden',\n    'stoppen': 'Stopp'\n};\nconst mode = st('input_select.lade_modus');\nconst override = st('input_boolean.soc_override') === 'on';\nconst target = num('input_number.car_target_soc');\nconst cheap = st('binary_sensor.tibber_is_cheapest_now') === 'on';\nconst zeit = new Date().toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' });\n\n// Werte als ausgerichtete Tabelle (Monospace)\nconst rows = [\n    ['Wallbox', st('sensor.easee_home_status') + ' · ' + fmt(num('sensor.wallbox_charge_power_kw'), 1) + ' kW · ' + fmt(num('sensor.easee_home_dynamic_charger_limit')) + ' A'],\n    ['Zoe', fmt(num('sensor.zoe_battery')) + ' % → Ziel ' + fmt(target) + ' %'],\n    ['Stecker', st('sensor.zoe_plug_state')],\n    ['PV', fmt(num('sensor.calculated_pv_surplus')) + ' W Überschuss'],\n    ['Speicher', fmt(num('sensor.rct_power_storage_battery_state_of_charge')) + ' %'],\n    ['Strom', (st('sensor.tibber_cheapest_now') || '–') + (cheap ? ' · günstig' : ' · nicht günstig')],\n    ['Kosten', fmt(num('sensor.wallbox_grid_cost_monthly'), 2) + ' € (Monat)'],\n    ['Override', !override ? 'aus' : target > 80 ? 'AN – lädt bis Ziel' : 'AN – lädt ohne Grenze']\n];\nconst table = rows.map(([k, v]) => k.padEnd(9) + esc(v)).join('\\n');\n\nconst text = [\n    '<b>Wallbox</b> · ' + zeit,\n    '',\n    'Modus: <b>' + esc((MODES[mode] || mode || '–').toUpperCase()) + '</b>',\n    '<i>' + esc(st('sensor.smart_charging_status')) + '</i>',\n    '',\n    '<pre>' + table + '</pre>'\n].join('\\n');\n\nconst btn = m => ({ text: mode === m ? '▶ ' + MODES[m].toUpperCase() + ' ◀' : MODES[m], callback_data: 'wb:m:' + m });\nconst keyboard = [\n    [btn('automatik'), btn('überschuss')],\n    [btn('günstigster_strom')],\n    [btn('laden'), btn('stoppen')],\n    [{ text: override ? 'SOC-Override ausschalten' : 'SOC-Override einschalten', callback_data: 'wb:o' }],\n    [\n        { text: target != null && target <= 50 ? '−5 % (min)' : '−5 %', callback_data: 'wb:t:-5' },\n        { text: 'Ziel ' + fmt(target) + ' %', callback_data: 'wb:r' },\n        { text: target != null && target >= (override ? 100 : 80) ? '+5 % (max)' : '+5 %', callback_data: 'wb:t:5' }\n    ],\n    [{ text: 'Aktualisieren', callback_data: 'wb:r' }]\n];\n\nconst wb = msg.wb || { chatId: msg.payload.chatId };\nif (wb.messageId) {\n    msg.payload = {\n        chatId: wb.chatId,\n        type: 'editMessageText',\n        content: text,\n        options: { chat_id: wb.chatId, message_id: wb.messageId, parse_mode: 'HTML', reply_markup: { inline_keyboard: keyboard } }\n    };\n} else {\n    msg.payload = {\n        chatId: wb.chatId,\n        type: 'message',\n        content: text,\n        options: { parse_mode: 'HTML', reply_markup: { inline_keyboard: keyboard } }\n    };\n}\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 790,
+        "y": 100,
+        "wires": [
+            [
+                "4298b510af8845f4"
+            ]
+        ]
+    },
+    {
+        "id": "4298b510af8845f4",
+        "type": "telegram sender",
+        "z": "875927071fb5a326",
+        "name": "senden",
+        "bot": "c3670dce.18aa8",
+        "haserroroutput": true,
+        "outputs": 2,
+        "x": 980,
+        "y": 100,
+        "wires": [
+            [],
+            [
+                "fdc41bd2317be3df"
+            ]
+        ]
+    },
+    {
+        "id": "5938a441e892144d",
+        "type": "catch",
+        "z": "875927071fb5a326",
+        "name": "Fehler",
+        "scope": null,
+        "uncaught": false,
+        "x": 780,
+        "y": 280,
+        "wires": [
+            [
+                "fdc41bd2317be3df"
+            ]
+        ]
+    },
+    {
+        "id": "ea239ad31374691c",
+        "type": "debug",
+        "z": "875927071fb5a326",
+        "name": "Wallbox-Telegram Fehler",
+        "active": true,
+        "tosidebar": true,
+        "console": true,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1010,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "fdc41bd2317be3df",
+        "type": "switch",
+        "z": "875927071fb5a326",
+        "name": "'not modified' ignorieren",
+        "property": "$string(error.message ? error.message : error)",
+        "propertyType": "jsonata",
+        "rules": [
+            {
+                "t": "cont",
+                "v": "message is not modified",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "false",
+        "repair": false,
+        "outputs": 2,
+        "x": 1010,
+        "y": 200,
+        "wires": [
+            [],
+            [
+                "ea239ad31374691c"
+            ]
+        ]
+    }
+]

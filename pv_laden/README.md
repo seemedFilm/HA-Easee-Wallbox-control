@@ -46,7 +46,7 @@ Developer Tools → YAML → Check Configuration → Restart
 - `input_number.max_charge_current` — Max. Ladestrom (Standard: 32A)
 - `input_number.phases` — Phasen (Standard: 3)
 - `input_number.min_battery_soc` — Min. Batterie-SOC für Priorität (Standard: 95%)
-- `input_number.car_target_soc` — Auto-Ziel-SOC (Standard: 80%), in allen Modi per `soc_override` überbrückbar
+- `input_number.car_target_soc` — Auto-Ziel-SOC (Standard: 80 %, 50–100 %). Ohne `soc_override` höchstens 80 %. Mit Override und Ziel > 80 % wird bis zum Ziel geladen, mit Override und Ziel ≤ 80 % ohne Grenze
 - `input_number.soc_override_max_duration` — Auto-Reset für `soc_override` nach X Minuten (Standard: 240 min, 0 = deaktiviert)
 - `input_number.cheap_price_tolerance_ct` — Günstigstrom-Toleranz über dem Tagestief in ct/kWh (Standard: 3 ct, 0–15 ct). Ohne `initial`, der eingestellte Wert bleibt über Neustarts erhalten
 - `input_number.bridge_max_minutes` — Max. Dauer der Wolken-Überbrückung in Automatik/PV-Überschuss (Standard: 10 min)
@@ -81,6 +81,7 @@ Developer Tools → YAML → Check Configuration → Restart
 
 - **notify_car_80_percent** — Benachrichtigung wenn Auto 80% SOC erreicht (nicht ausgelöst, wenn SOC-Override aktiv weiterlädt)
 - **notify_car_over_80_override_active** — Warn-Benachrichtigung, wenn bei aktivem SOC-Override über 80% hinaus geladen wird
+- **clamp_car_target_soc** — Setzt ein Ziel-SOC über 80 % auf 80 % zurück, solange kein SOC-Override aktiv ist (auch beim Ausschalten des Overrides und beim HA-Start)
 - **reset_soc_override_on_unplug** — Setzt SOC-Override automatisch zurück, sobald das Fahrzeug ausgesteckt wird
 - **reset_soc_override_timeout** — Setzt SOC-Override automatisch zurück, wenn er länger als `soc_override_max_duration` aktiv war
 
@@ -97,6 +98,11 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 | `sensor.zoe_*` | My Renault |
 
 ## Changelog
+
+### v2.8 (2026-10-02)
+- Geändert: `input_number.car_target_soc` bis 100 % einstellbar. Über 80 % nur mit SOC-Override, sonst setzt die neue Automation `clamp_car_target_soc` auf 80 % zurück
+- `sensor.smart_charging_status`: neuer Text „Ziel X% erreicht (Override)“
+- Benötigt Node-RED Flow v2.7 (lädt mit Override bis zum Ziel, falls > 80 %)
 
 ### v2.7 (2026-10-01)
 - Geändert: Package setzt den Recorder nicht mehr global — `recorder`-, `history`- und `logbook`-Abschnitte entfernt
@@ -159,5 +165,5 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ---
 
-**Version:** 2.6.1
-**Kompatibilität:** Node-RED Flow v2.6, Home Assistant 2024.x+
+**Version:** 2.8
+**Kompatibilität:** Node-RED Flow v2.7, Home Assistant 2024.x+
