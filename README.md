@@ -13,6 +13,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 | Datei | Zweck |
 |---|---|
 | [`smartes_pv_laden_flow_v2.6_2026-10-01.json`](smartes_pv_laden_flow_v2.6_2026-10-01.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`wallbox_telegram_flow_v1.1_2026-10-02.json`](wallbox_telegram_flow_v1.1_2026-10-02.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -254,7 +255,16 @@ In den Node-RED Settings muss aktiviert sein (damit der Flow die HA-States live 
 enableGlobalContextStore: true
 ```
 
-### 3. Dashboard einrichten
+### 3. Telegram-Menü (optional)
+
+Steuert die Wallbox per Telegram-Bot: `/wallbox` schickt Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, Aktualisieren). Die Buttons setzen nur die HA-Helfer (`input_select.lade_modus`, `input_boolean.soc_override`, `input_number.car_target_soc`) — die eigentliche Steuerung macht weiterhin der PV-Laden-Flow.
+
+1. Palette `node-red-contrib-telegrambot` installieren und einen Bot-Config-Node anlegen (Token von @BotFather, unter *Users/ChatIds* nur die eigenen Chat-IDs freigeben).
+2. Menü → Import → `wallbox_telegram_flow_v1.1_2026-10-02.json` → *Import to: new flow*.
+3. In den Telegram-Nodes (`/wallbox`, *Button gedrückt*, *senden*) den eigenen Bot wählen, im Node *HA-Helfer setzen* den Home-Assistant-Server.
+4. Deploy, dann im Chat `/wallbox` senden.
+
+### 4. Dashboard einrichten
 
 1. Über HACS installieren: **Mushroom**, **ApexCharts Card**, **Power Flow Card Plus**
 2. *Einstellungen → Dashboards → Dashboard hinzufügen* → neues Dashboard öffnen → ⋮ → *Rohdaten-Konfigurationseditor*
@@ -353,6 +363,7 @@ Derzeit keine bekannten Probleme.
 ```
 ├── README.md                                        # Diese Datei
 ├── smartes_pv_laden_flow_v2.6_2026-10-01.json       # Node-RED Flow (aktuell)
+├── wallbox_telegram_flow_v1.1_2026-10-02.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -364,6 +375,10 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Telegram-Menü v1.1 (2026-10-02)
+- **Neu im Repo:** Node-RED-Tab „Wallbox Telegram“ (`/wallbox`), seit v1.0 (2026-10-01) im Einsatz
+- **Übersichtlicher:** Emojis entfernt; aktiver Lademodus fett in Großbuchstaben im Text und als einziger Button markiert (`▶ AUTOMATIK ◀`); Werte als ausgerichtete Tabelle
 
 ### Package v2.7 (2026-10-01)
 - **Recorder nicht mehr global:** Das Package enthält keine `recorder`/`history`/`logbook`-Abschnitte mehr. Ohne Filter zeichnet HA alles auf. Für Installationen mit eigener Whitelist gibt es das optionale Zusatz-Package `pv_laden/pv_laden_recorder.yaml`, das seine Entities an die bestehende Whitelist anhängt
