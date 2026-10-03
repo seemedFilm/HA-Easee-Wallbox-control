@@ -36,7 +36,7 @@ Developer Tools → YAML → Check Configuration → Restart
 - `input_select.lade_modus` — automatik / laden / stoppen / überschuss / günstigster_strom
 
 **Input Boolean (4):**
-- `input_boolean.battery_priority` — Batterie-Priorität (erst ab 95% SOC Auto laden). Gilt für alle Modi außer "laden".
+- `input_boolean.battery_priority` — Batterie-Priorität (erst ab 95% SOC Auto mit PV laden). Gilt ab Flow v2.8 nur für das PV-Laden, nicht für „laden“, „günstigster_strom“ und den Automatik-Günstigstrom-Fallback.
 - `input_boolean.prevent_battery_discharge` — Entladungsschutz + RCT Battery Lock
 - `input_boolean.soc_override` — Auto-Ziel-SOC überbrücken. Gilt jetzt einheitlich für **alle** Modi (auch Automatik). Persistent — wird automatisch zurückgesetzt bei Ausstecken oder nach `soc_override_max_duration` (siehe Automationen).
 - `input_boolean.tibber_enabled` — Günstigstrom-Fallback **innerhalb von Automatik**, wenn PV-Überschuss nicht reicht. Der eigenständige Modus "günstigster_strom" funktioniert unabhängig von diesem Schalter.

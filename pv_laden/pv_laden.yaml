@@ -3,7 +3,7 @@
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.7
+# Voraussetzung: Node-RED Flow v2.7 oder neuer
 #
 # v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
 #   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
