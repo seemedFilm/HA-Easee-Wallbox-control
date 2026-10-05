@@ -12,7 +12,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.8_2026-10-03.json`](smartes_pv_laden_flow_v2.8_2026-10-03.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`smartes_pv_laden_flow_v2.8.1_2026-10-05.json`](smartes_pv_laden_flow_v2.8.1_2026-10-05.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
 | [`wallbox_telegram_flow_v1.3_2026-10-02.json`](wallbox_telegram_flow_v1.3_2026-10-02.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
@@ -247,7 +247,7 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.8_2026-10-03.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.8.1_2026-10-05.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
 4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
@@ -364,7 +364,7 @@ Derzeit keine bekannten Probleme.
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.8_2026-10-03.json       # Node-RED Flow (aktuell)
+├── smartes_pv_laden_flow_v2.8.1_2026-10-05.json       # Node-RED Flow (aktuell)
 ├── wallbox_telegram_flow_v1.3_2026-10-02.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
@@ -377,6 +377,9 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Flow v2.8.1 (2026-10-05)
+- Battery Lock: kein Entsperren, solange `input_boolean.akku_halten` an ist (externes Package hält den vollen Hausakku bis zum Abend)
 
 ### Flow v2.8 (2026-10-03)
 - **Auto-Vorrang beim Netzladen:** Batterie-Priorität (`battery_priority`/`min_battery_soc`) sperrt nur noch das PV-Laden. „Günstigster Strom“ und der Automatik-Günstigstrom-Fallback laden das Auto auch bei leerem Hausakku. Abgestimmt mit einem separaten HA-Package, das den Hausakku im günstigsten Tibber-Fenster aus dem Netz lädt und pausiert, solange die Wallbox lädt
