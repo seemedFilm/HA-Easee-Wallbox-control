@@ -1,14 +1,18 @@
 # ============================================================
-# PV-Laden Package v2.8
+# PV-Laden Package v2.9
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.7 oder neuer
+# Voraussetzung: Node-RED Flow v2.9 oder neuer
 #
 # v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
 #   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
 # v2.6.1 (2026-10-01): Recorder/History wieder inkl. externer Sensoren (RCT/Easee/
 #   Zoe/Tibber) – die globale include-Whitelist hatte deren Aufzeichnung gestoppt.
+# v2.9 (2026-10-08): Grenzen nur für den aktuellen Ladevorgang: input_number.session_soc_limit
+#   (Auto-SOC, 0 = aus) und input_number.session_cost_limit (Netzladekosten in €, 0 = aus).
+#   sensor.wallbox_session_cost = Netzladekosten seit dem Einstecken. Beides wird beim
+#   Ausstecken zurückgesetzt.
 # v2.8 (2026-10-02): Ziel-SOC bis 100 % einstellbar, aber nur mit SOC-Override.
 #   Ohne Override wird ein Ziel > 80 % automatisch auf 80 % zurückgesetzt
 #   (auch beim Ausschalten des Overrides). Override + Ziel > 80 % lädt bis zum Ziel.
@@ -113,6 +117,36 @@ input_number:
     unit_of_measurement: "%"
     mode: slider
     initial: 80
+
+  # v2.9: Grenzen nur für den aktuellen Ladevorgang (0 = aus), Reset beim Ausstecken.
+  # Ohne "initial", damit sie einen HA-Neustart während der Ladung überstehen.
+  session_soc_limit:
+    name: Ladevorgang bis Auto-SOC
+    icon: mdi:battery-charging-high
+    min: 0
+    max: 100   # > 80 % nur mit SOC-Override (Automation clamp_session_soc_limit)
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+
+  session_cost_limit:
+    name: Ladevorgang bis Kosten
+    icon: mdi:cash-lock
+    min: 0
+    max: 50
+    step: 0.5
+    unit_of_measurement: EUR
+    mode: slider
+
+  # Stand von sensor.wallbox_grid_charge_cost_total beim Einstecken (intern)
+  session_cost_start:
+    name: Netzladekosten-Zähler bei Ladebeginn
+    icon: mdi:counter
+    min: 0
+    max: 1000000
+    step: 0.0001
+    unit_of_measurement: EUR
+    mode: box
 
   soc_override_max_duration:
     name: SOC-Override Auto-Reset nach
@@ -287,6 +321,17 @@ template:
           {% set threshold = min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100 %}
           {{ (price * 100) | round(1) }} / {{ (threshold * 100) | round(1) }} ct/kWh
 
+      # v2.9: Netzladekosten seit dem Einstecken (Basis für session_cost_limit)
+      - name: "Wallbox Kosten Ladevorgang"
+        unique_id: wallbox_session_cost
+        icon: mdi:cash-clock
+        unit_of_measurement: EUR
+        availability: >
+          {{ states('sensor.wallbox_grid_charge_cost_total') not in ['unknown', 'unavailable', 'none'] }}
+        state: >
+          {{ [0, states('sensor.wallbox_grid_charge_cost_total') | float(0)
+                 - states('input_number.session_cost_start') | float(0)] | max | round(2) }}
+
       - name: "Smart Charging Status"
         unique_id: smart_charging_status
         icon: mdi:information
@@ -295,11 +340,17 @@ template:
           {% set charging = is_state('sensor.easee_home_status', 'charging') %}
           {% set plugged = states('sensor.zoe_plug_state') in ['Plugged in', 'plugged'] %}
           {% set car_soc = states('sensor.zoe_battery') | float(0) %}
-          {% set target_soc = states('input_number.car_target_soc') | float(80) %}
           {% set override = is_state('input_boolean.soc_override', 'on') %}
+          {% set sess_soc = states('input_number.session_soc_limit') | float(0) %}
+          {% set target_soc = (sess_soc if override else [sess_soc, 80] | min) if sess_soc > 0
+                              else states('input_number.car_target_soc') | float(80) %}
+          {% set budget = states('input_number.session_cost_limit') | float(0) %}
+          {% set cost = states('sensor.wallbox_session_cost') | float(0) %}
           {% set cheap = is_state('binary_sensor.tibber_is_cheapest_now', 'on') %}
           {% if not plugged %}Warte auf Auto-Anschluss
           {% elif mode == 'stoppen' %}Manuell gestoppt
+          {% elif sess_soc > 0 and car_soc >= target_soc %}Ladevorgang-Ziel {{ target_soc | int }}% erreicht
+          {% elif budget > 0 and cost >= budget and (mode in ['laden', 'günstigster_strom'] or not charging) %}Kostenbudget erreicht ({{ '%.2f' | format(cost) }} / {{ '%.2f' | format(budget) }} €){{ '' if mode in ['laden', 'günstigster_strom'] else ' – nur noch PV' }}
           {% elif car_soc >= target_soc and not override %}Auto-SOC Limit ({{ target_soc | int }}%) – Override erforderlich zum Weiterladen
           {% elif car_soc >= target_soc and target_soc > 80 %}Ziel {{ target_soc | int }}% erreicht (Override)
           {% elif car_soc >= target_soc and override and mode == 'laden' %}Laden erzwungen (ÜBER {{ target_soc | int }}%!, {{ states('input_number.max_charge_current') | int }}A)
@@ -362,7 +413,8 @@ template:
         device_class: battery
         state: >
           {% set soc = states('sensor.zoe_battery') | float(0) %}
-          {{ soc < (states('input_number.car_target_soc') | float(80)) }}
+          {% set sess = states('input_number.session_soc_limit') | float(0) %}
+          {{ soc < (sess if sess > 0 else states('input_number.car_target_soc') | float(80)) }}
 
 # --- Automationen ---
 automation:
@@ -438,6 +490,73 @@ automation:
           entity_id: input_number.car_target_soc
         data:
           value: 80
+
+  # --- v2.9: Grenzen für den aktuellen Ladevorgang ---
+  - id: session_start_on_plug
+    alias: "PV-Laden: Ladevorgang beginnt (Kostenzähler merken)"
+    trigger:
+      - platform: state
+        entity_id: sensor.zoe_plug_state
+        to: ["plugged", "Plugged in"]
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.session_cost_start
+        data:
+          value: "{{ states('sensor.wallbox_grid_charge_cost_total') | float(0) }}"
+
+  - id: session_reset_on_unplug
+    alias: "PV-Laden: Ladevorgang-Grenzen bei Ausstecken zurücksetzen"
+    trigger:
+      - platform: state
+        entity_id: sensor.zoe_plug_state
+        from: ["plugged", "Plugged in"]
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id:
+            - input_number.session_soc_limit
+            - input_number.session_cost_limit
+        data:
+          value: 0
+
+  - id: clamp_session_soc_limit
+    alias: "PV-Laden: Ladevorgang-SOC ohne Override auf 80% begrenzen"
+    trigger:
+      - platform: state
+        entity_id: input_number.session_soc_limit
+      - platform: state
+        entity_id: input_boolean.soc_override
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.soc_override
+        state: "off"
+      - condition: numeric_state
+        entity_id: input_number.session_soc_limit
+        above: 80
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.session_soc_limit
+        data:
+          value: 80
+
+  - id: notify_session_cost_limit
+    alias: "PV-Laden: Kostenbudget des Ladevorgangs erreicht"
+    trigger:
+      - platform: template
+        value_template: >
+          {{ states('input_number.session_cost_limit') | float(0) > 0 and
+             states('sensor.wallbox_session_cost') | float(0) >= states('input_number.session_cost_limit') | float(0) }}
+    action:
+      - service: notify.mobile_app_sm_s938b
+        data:
+          title: "Smartes Laden: Kostenbudget erreicht"
+          message: >
+            Ladevorgang hat {{ states('sensor.wallbox_session_cost') }} € Netzstrom gekostet
+            (Budget {{ states('input_number.session_cost_limit') }} €). Netzladen gestoppt,
+            PV-Überschuss lädt weiter. Zoe: {{ states('sensor.zoe_battery') }} %.
 
   - id: reset_soc_override_on_unplug
     alias: "PV-Laden: SOC-Override bei Ausstecken zurücksetzen"

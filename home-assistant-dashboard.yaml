@@ -1,4 +1,4 @@
-# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.8
+# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.9
 #
 # Installation:
 # 1. Settings → Dashboards → "+ Add Dashboard"
@@ -9,6 +9,8 @@
 # 6. Diesen YAML-Code einfügen
 #
 # ===== REVISIONSHISTORIE =====
+# v1.9 (2026-10-08): Grenzen nur für den aktuellen Ladevorgang (Package/Flow v2.9):
+#   input_number.session_soc_limit, input_number.session_cost_limit, sensor.wallbox_session_cost
 # v1.8 (2026-10-01): Günstigstrom-Schwelle in ct statt % (Package/Flow v2.6):
 #   - Neue Sektion "Günstigstrom (Tibber)" in der System-Konfiguration und neue
 #     Karte in den Einstellungen (input_number.cheap_price_tolerance_ct,
@@ -501,6 +503,21 @@ views:
             icon: mdi:battery-80
 
           - type: section
+            label: Nur dieser Ladevorgang (Reset beim Ausstecken)
+
+          - entity: input_number.session_soc_limit
+            name: Laden bis Auto-SOC (0 = aus)
+            icon: mdi:battery-charging-high
+
+          - entity: input_number.session_cost_limit
+            name: Laden bis Kosten (0 = aus)
+            icon: mdi:cash-lock
+
+          - entity: sensor.wallbox_session_cost
+            name: Kosten seit Einstecken
+            icon: mdi:cash-clock
+
+          - type: section
             label: Batterie-Management
 
           - entity: input_boolean.battery_priority
@@ -746,6 +763,18 @@ views:
         entities:
           - entity: input_number.car_target_soc
             name: Ziel-SOC (Hard-Limit 80%)
+
+          - entity: input_number.session_soc_limit
+            name: Laden bis Auto-SOC (0 = aus)
+            icon: mdi:battery-charging-high
+
+          - entity: input_number.session_cost_limit
+            name: Laden bis Kosten (0 = aus)
+            icon: mdi:cash-lock
+
+          - entity: sensor.wallbox_session_cost
+            name: Kosten seit Einstecken
+            icon: mdi:cash-clock
 
           - entity: input_number.car_soc_threshold_pure_surplus
             name: Schwelle für reinen Überschuss

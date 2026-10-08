@@ -46,6 +46,9 @@ Developer Tools → YAML → Check Configuration → Restart
 - `input_number.max_charge_current` — Max. Ladestrom (Standard: 32A)
 - `input_number.phases` — Phasen (Standard: 3)
 - `input_number.min_battery_soc` — Min. Batterie-SOC für Priorität (Standard: 95%)
+- `input_number.session_soc_limit` — Nur dieser Ladevorgang: Laden bis Auto-SOC (0 = aus, über 80 % nur mit Override), Reset beim Ausstecken
+- `input_number.session_cost_limit` — Nur dieser Ladevorgang: Kostenbudget in € für Netzladen (0 = aus), Reset beim Ausstecken
+- `input_number.session_cost_start` — intern: Stand von `sensor.wallbox_grid_charge_cost_total` beim Einstecken
 - `input_number.car_target_soc` — Auto-Ziel-SOC (Standard: 80 %, 50–100 %). Ohne `soc_override` höchstens 80 %. Mit Override und Ziel > 80 % wird bis zum Ziel geladen, mit Override und Ziel ≤ 80 % ohne Grenze
 - `input_number.soc_override_max_duration` — Auto-Reset für `soc_override` nach X Minuten (Standard: 240 min, 0 = deaktiviert)
 - `input_number.cheap_price_tolerance_ct` — Günstigstrom-Toleranz über dem Tagestief in ct/kWh (Standard: 3 ct, 0–15 ct). Ohne `initial`, der eingestellte Wert bleibt über Neustarts erhalten
@@ -81,6 +84,9 @@ Developer Tools → YAML → Check Configuration → Restart
 
 - **notify_car_80_percent** — Benachrichtigung wenn Auto 80% SOC erreicht (nicht ausgelöst, wenn SOC-Override aktiv weiterlädt)
 - **notify_car_over_80_override_active** — Warn-Benachrichtigung, wenn bei aktivem SOC-Override über 80% hinaus geladen wird
+- **session_start_on_plug** / **session_reset_on_unplug** — Merkt den Kostenzähler beim Einstecken, setzt die Ladevorgang-Grenzen beim Ausstecken zurück
+- **clamp_session_soc_limit** — Ladevorgang-SOC über 80 % nur mit SOC-Override
+- **notify_session_cost_limit** — Push, wenn das Kostenbudget des Ladevorgangs erreicht ist
 - **clamp_car_target_soc** — Setzt ein Ziel-SOC über 80 % auf 80 % zurück, solange kein SOC-Override aktiv ist (auch beim Ausschalten des Overrides und beim HA-Start)
 - **reset_soc_override_on_unplug** — Setzt SOC-Override automatisch zurück, sobald das Fahrzeug ausgesteckt wird
 - **reset_soc_override_timeout** — Setzt SOC-Override automatisch zurück, wenn er länger als `soc_override_max_duration` aktiv war
@@ -98,6 +104,11 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 | `sensor.zoe_*` | My Renault |
 
 ## Changelog
+
+### v2.9 (2026-10-08)
+- Neu: Grenzen nur für den aktuellen Ladevorgang — `input_number.session_soc_limit`, `input_number.session_cost_limit`, `sensor.wallbox_session_cost` (Entity-ID per Registry von `sensor.wallbox_kosten_ladevorgang` umbenannt) und vier Automationen (siehe oben)
+- `sensor.smart_charging_status` / `binary_sensor.car_soc_below_target` berücksichtigen das Ladevorgang-Ziel und das Kostenbudget
+- Benötigt Node-RED Flow v2.9
 
 ### v2.8 (2026-10-02)
 - Geändert: `input_number.car_target_soc` bis 100 % einstellbar. Über 80 % nur mit SOC-Override, sonst setzt die neue Automation `clamp_car_target_soc` auf 80 % zurück
@@ -165,5 +176,5 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ---
 
-**Version:** 2.8
-**Kompatibilität:** Node-RED Flow v2.7, Home Assistant 2024.x+
+**Version:** 2.9
+**Kompatibilität:** Node-RED Flow v2.9, Home Assistant 2024.x+
