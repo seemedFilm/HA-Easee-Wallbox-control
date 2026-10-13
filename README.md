@@ -12,8 +12,8 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.9_2026-10-08.json`](smartes_pv_laden_flow_v2.9_2026-10-08.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
-| [`wallbox_telegram_flow_v1.4_2026-10-08.json`](wallbox_telegram_flow_v1.4_2026-10-08.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
+| [`smartes_pv_laden_flow_v2.10_2026-10-13.json`](smartes_pv_laden_flow_v2.10_2026-10-13.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`wallbox_telegram_flow_v1.4.1_2026-10-13.json`](wallbox_telegram_flow_v1.4.1_2026-10-13.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -249,7 +249,7 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.9_2026-10-08.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.10_2026-10-13.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
 4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
@@ -264,7 +264,7 @@ enableGlobalContextStore: true
 Steuert die Wallbox per Telegram-Bot: `/wallbox` schickt Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, für diesen Ladevorgang: bis SOC ±5 % und Kostenbudget −1/+1/+5 €, Aktualisieren). Die Buttons setzen nur die HA-Helfer (`input_select.lade_modus`, `input_boolean.soc_override`, `input_number.car_target_soc`) — die eigentliche Steuerung macht weiterhin der PV-Laden-Flow.
 
 1. Palette `node-red-contrib-telegrambot` installieren und einen Bot-Config-Node anlegen (Token von @BotFather, unter *Users/ChatIds* nur die eigenen Chat-IDs freigeben).
-2. Menü → Import → `wallbox_telegram_flow_v1.4_2026-10-08.json` → *Import to: new flow*.
+2. Menü → Import → `wallbox_telegram_flow_v1.4.1_2026-10-13.json` → *Import to: new flow*.
 3. In den Telegram-Nodes (`/wallbox`, *Button gedrückt*, *senden*) den eigenen Bot wählen, im Node *HA-Helfer setzen* den Home-Assistant-Server.
 4. Deploy, dann im Chat `/wallbox` senden.
 
@@ -301,7 +301,7 @@ Alle Parameter über **Home Assistant UI**:
 | `sensor.rct_power_storage_inverter_ac_power` | RCT | PV-Leistung |
 | `sensor.zoe_charge_state` | My Renault | Lade-Status des Autos |
 | `sensor.zoe_battery` | My Renault | Auto-SOC |
-| `sensor.zoe_plug_state` | My Renault | Anschluss-Status |
+| `sensor.zoe_plug_state` | My Renault | Anschluss-Status (nur Anzeige; seit v2.10 erkennt der Flow das Ein-/Abstecken über `sensor.easee_home_status`) |
 | `sensor.sectorchan_electricity_price` | Tibber | Strompreis + min_price Attribut |
 | `switch.rct_lock_battery` | rctpower_writesupport | Battery Lock |
 
@@ -335,7 +335,7 @@ easee.set_charger_dynamic_limit:
 
 **Lädt nicht trotz Sonne?**
 Prüfe in Reihenfolge:
-1. `sensor.zoe_plug_state` = "Plugged in"?
+1. `sensor.easee_home_status` ≠ "disconnected" (Auto an der Wallbox)?
 2. `sensor.zoe_battery` < 80%?
 3. `sensor.rct_power_storage_battery_state_of_charge` ≥ 95% (falls battery_priority an)?
 4. Berechneter Überschuss ≥ 3600W? (Node-RED Debug-Sidebar)
@@ -366,8 +366,8 @@ Derzeit keine bekannten Probleme.
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.9_2026-10-08.json       # Node-RED Flow (aktuell)
-├── wallbox_telegram_flow_v1.4_2026-10-08.json       # optional: Telegram-Menü /wallbox
+├── smartes_pv_laden_flow_v2.10_2026-10-13.json       # Node-RED Flow (aktuell)
+├── wallbox_telegram_flow_v1.4.1_2026-10-13.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -379,6 +379,10 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Flow v2.10 / Package v2.10 / Telegram-Menü v1.4.1 (2026-10-13)
+- **Fix Abstecken:** „Auto angeschlossen“ kommt jetzt von der Wallbox (`sensor.easee_home_status` ≠ `disconnected`) statt vom Renault-Sensor `sensor.zoe_plug_state`. Der blieb nach dem Abstecken stundenlang auf „plugged“ (die Zoe schläft ein). Folge war: Der Flow sendete weiter Startbefehle, der Status blieb „aktiv“, der Battery Lock blieb gemerkt (beim nächsten Einstecken wäre nicht neu gesperrt worden) und Override/Ladevorgang-Grenzen wurden nicht zurückgesetzt. Gilt für Flow, `sensor.smart_charging_status` und die Automationen `session_start_on_plug`, `session_reset_on_unplug`, `reset_soc_override_on_unplug`
+- **Fix Günstigstrom-Schwelle:** gerundet auf 0,01 ct. Vorher galt ein Preis genau auf der Schwelle wegen Gleitkomma-Rundung als zu teuer (z. B. 28,4 + 3 = 31,399… < 31,4 ct)
 
 ### Flow v2.9 / Package v2.9 / Dashboard v1.9 / Telegram-Menü v1.4 (2026-10-08)
 - **Laden bis Auto-SOC (nur dieser Ladevorgang):** `input_number.session_soc_limit` (0 = aus) ersetzt für den aktuellen Ladevorgang den Ziel-SOC; über 80 % nur mit SOC-Override (`clamp_session_soc_limit`)

@@ -105,6 +105,11 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ## Changelog
 
+### v2.10 (2026-10-13)
+- Fix: Ein-/Abstecken über `sensor.easee_home_status` (`disconnected`) statt `sensor.zoe_plug_state` (Renault-Cloud, bleibt nach dem Abstecken hängen) — in `sensor.smart_charging_status`, `session_start_on_plug`, `session_reset_on_unplug`, `reset_soc_override_on_unplug`
+- Fix: Günstigstrom-Schwelle in `binary_sensor.tibber_is_cheapest_now` / `sensor.tibber_cheapest_now` gerundet (Preis genau auf der Schwelle galt wegen Gleitkomma als zu teuer)
+- Benötigt Node-RED Flow v2.10
+
 ### v2.9 (2026-10-08)
 - Neu: Grenzen nur für den aktuellen Ladevorgang — `input_number.session_soc_limit`, `input_number.session_cost_limit`, `sensor.wallbox_session_cost` (Entity-ID per Registry von `sensor.wallbox_kosten_ladevorgang` umbenannt) und vier Automationen (siehe oben)
 - `sensor.smart_charging_status` / `binary_sensor.car_soc_below_target` berücksichtigen das Ladevorgang-Ziel und das Kostenbudget
@@ -176,5 +181,5 @@ Folgende Entities müssen von anderen Integrationen bereitgestellt werden:
 
 ---
 
-**Version:** 2.9
-**Kompatibilität:** Node-RED Flow v2.9, Home Assistant 2024.x+
+**Version:** 2.10
+**Kompatibilität:** Node-RED Flow v2.10, Home Assistant 2024.x+

@@ -1,14 +1,17 @@
 # ============================================================
-# PV-Laden Package v2.9
+# PV-Laden Package v2.10
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.9 oder neuer
+# Voraussetzung: Node-RED Flow v2.10 oder neuer
 #
 # v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
 #   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
 # v2.6.1 (2026-10-01): Recorder/History wieder inkl. externer Sensoren (RCT/Easee/
 #   Zoe/Tibber) – die globale include-Whitelist hatte deren Aufzeichnung gestoppt.
+# v2.10 (2026-10-13): Ein-/Abstecken über sensor.easee_home_status (disconnected) statt
+#   sensor.zoe_plug_state – der Renault-Sensor bleibt nach dem Abstecken oft auf "plugged".
+#   Günstigstrom-Schwelle gerundet (Gleitkomma-Fehler an der Schwelle).
 # v2.9 (2026-10-08): Grenzen nur für den aktuellen Ladevorgang: input_number.session_soc_limit
 #   (Auto-SOC, 0 = aus) und input_number.session_cost_limit (Netzladekosten in €, 0 = aus).
 #   sensor.wallbox_session_cost = Netzladekosten seit dem Einstecken. Beides wird beim
@@ -318,7 +321,7 @@ template:
         state: >
           {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
           {% set min_price = state_attr('sensor.sectorchan_electricity_price', 'min_price') | float(0) %}
-          {% set threshold = min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100 %}
+          {% set threshold = (min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100) | round(4) %}
           {{ (price * 100) | round(1) }} / {{ (threshold * 100) | round(1) }} ct/kWh
 
       # v2.9: Netzladekosten seit dem Einstecken (Basis für session_cost_limit)
@@ -338,7 +341,7 @@ template:
         state: >
           {% set mode = states('input_select.lade_modus') %}
           {% set charging = is_state('sensor.easee_home_status', 'charging') %}
-          {% set plugged = states('sensor.zoe_plug_state') in ['Plugged in', 'plugged'] %}
+          {% set plugged = not is_state('sensor.easee_home_status', 'disconnected') %}
           {% set car_soc = states('sensor.zoe_battery') | float(0) %}
           {% set override = is_state('input_boolean.soc_override', 'on') %}
           {% set sess_soc = states('input_number.session_soc_limit') | float(0) %}
@@ -398,8 +401,8 @@ template:
         state: >
           {% set price = states('sensor.sectorchan_electricity_price') | float(0) %}
           {% set min_price = state_attr('sensor.sectorchan_electricity_price', 'min_price') | float(0) %}
-          {% set threshold = min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100 %}
-          {{ price > 0 and price <= threshold }}
+          {% set threshold = (min_price + (states('input_number.cheap_price_tolerance_ct') | float(3)) / 100) | round(4) %}
+          {{ price > 0 and price <= threshold + 0.000001 }}
 
       - name: "Battery SOC Above Minimum"
         unique_id: battery_soc_above_minimum
@@ -496,8 +499,11 @@ automation:
     alias: "PV-Laden: Ladevorgang beginnt (Kostenzähler merken)"
     trigger:
       - platform: state
-        entity_id: sensor.zoe_plug_state
-        to: ["plugged", "Plugged in"]
+        entity_id: sensor.easee_home_status
+        from: "disconnected"
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
     action:
       - service: input_number.set_value
         target:
@@ -509,8 +515,8 @@ automation:
     alias: "PV-Laden: Ladevorgang-Grenzen bei Ausstecken zurücksetzen"
     trigger:
       - platform: state
-        entity_id: sensor.zoe_plug_state
-        from: ["plugged", "Plugged in"]
+        entity_id: sensor.easee_home_status
+        to: "disconnected"
     action:
       - service: input_number.set_value
         target:
@@ -562,11 +568,8 @@ automation:
     alias: "PV-Laden: SOC-Override bei Ausstecken zurücksetzen"
     trigger:
       - platform: state
-        entity_id: sensor.zoe_plug_state
-        from: "Plugged in"
-      - platform: state
-        entity_id: sensor.zoe_plug_state
-        from: "plugged"
+        entity_id: sensor.easee_home_status
+        to: "disconnected"
     condition:
       - condition: state
         entity_id: input_boolean.soc_override
