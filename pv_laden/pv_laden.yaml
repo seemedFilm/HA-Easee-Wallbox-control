@@ -1,10 +1,13 @@
 # ============================================================
-# PV-Laden Package v2.10
+# PV-Laden Package v2.11
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.10 oder neuer
+# Voraussetzung: Node-RED Flow v2.11 oder neuer
 #
+# v2.11 (2026-11-05): Ladevorgang bis Restreichweite: input_number.session_range_limit (km,
+#   0 = aus, Reset beim Ausstecken). Quelle sensor.zoe_battery_autonomy. Der Flow stoppt,
+#   sobald die Grenze erreicht ist; die 80-%-Grenze ohne Override gilt weiterhin.
 # v2.6 (2026-10-01): Günstigstrom-Schwelle = Tagestief + feste Toleranz in ct
 #   (input_number.cheap_price_tolerance_ct, Standard 3 ct) statt Tagestief + 15 %.
 # v2.6.1 (2026-10-01): Recorder/History wieder inkl. externer Sensoren (RCT/Easee/
@@ -130,6 +133,16 @@ input_number:
     max: 100   # > 80 % nur mit SOC-Override (Automation clamp_session_soc_limit)
     step: 5
     unit_of_measurement: "%"
+    mode: slider
+
+  # v2.11: Restreichweite laut Zoe (sensor.zoe_battery_autonomy)
+  session_range_limit:
+    name: Ladevorgang bis Reichweite
+    icon: mdi:map-marker-distance
+    min: 0
+    max: 400
+    step: 10
+    unit_of_measurement: km
     mode: slider
 
   session_cost_limit:
@@ -349,10 +362,13 @@ template:
                               else states('input_number.car_target_soc') | float(80) %}
           {% set budget = states('input_number.session_cost_limit') | float(0) %}
           {% set cost = states('sensor.wallbox_session_cost') | float(0) %}
+          {% set range_lim = states('input_number.session_range_limit') | float(0) %}
+          {% set range_raw = states('sensor.zoe_battery_autonomy') %}
           {% set cheap = is_state('binary_sensor.tibber_is_cheapest_now', 'on') %}
           {% if not plugged %}Warte auf Auto-Anschluss
           {% elif mode == 'stoppen' %}Manuell gestoppt
           {% elif sess_soc > 0 and car_soc >= target_soc %}Ladevorgang-Ziel {{ target_soc | int }}% erreicht
+          {% elif range_lim > 0 and range_raw | is_number and range_raw | float >= range_lim %}Ladevorgang-Ziel {{ range_lim | int }} km erreicht ({{ range_raw | float | int }} km)
           {% elif budget > 0 and cost >= budget and (mode in ['laden', 'günstigster_strom'] or not charging) %}Kostenbudget erreicht ({{ '%.2f' | format(cost) }} / {{ '%.2f' | format(budget) }} €){{ '' if mode in ['laden', 'günstigster_strom'] else ' – nur noch PV' }}
           {% elif car_soc >= target_soc and not override %}Auto-SOC Limit ({{ target_soc | int }}%) – Override erforderlich zum Weiterladen
           {% elif car_soc >= target_soc and target_soc > 80 %}Ziel {{ target_soc | int }}% erreicht (Override)
@@ -522,6 +538,7 @@ automation:
         target:
           entity_id:
             - input_number.session_soc_limit
+            - input_number.session_range_limit
             - input_number.session_cost_limit
         data:
           value: 0

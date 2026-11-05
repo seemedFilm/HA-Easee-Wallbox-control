@@ -1,4 +1,4 @@
-# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.9
+# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.10
 #
 # Installation:
 # 1. Settings → Dashboards → "+ Add Dashboard"
@@ -9,6 +9,7 @@
 # 6. Diesen YAML-Code einfügen
 #
 # ===== REVISIONSHISTORIE =====
+# v1.10 (2026-11-05): Laden bis Reichweite (Package/Flow v2.11): input_number.session_range_limit
 # v1.9 (2026-10-08): Grenzen nur für den aktuellen Ladevorgang (Package/Flow v2.9):
 #   input_number.session_soc_limit, input_number.session_cost_limit, sensor.wallbox_session_cost
 # v1.8 (2026-10-01): Günstigstrom-Schwelle in ct statt % (Package/Flow v2.6):
@@ -509,6 +510,10 @@ views:
             name: Laden bis Auto-SOC (0 = aus)
             icon: mdi:battery-charging-high
 
+          - entity: input_number.session_range_limit
+            name: Laden bis Reichweite (0 = aus)
+            icon: mdi:map-marker-distance
+
           - entity: input_number.session_cost_limit
             name: Laden bis Kosten (0 = aus)
             icon: mdi:cash-lock
@@ -767,6 +772,10 @@ views:
           - entity: input_number.session_soc_limit
             name: Laden bis Auto-SOC (0 = aus)
             icon: mdi:battery-charging-high
+
+          - entity: input_number.session_range_limit
+            name: Laden bis Reichweite (0 = aus)
+            icon: mdi:map-marker-distance
 
           - entity: input_number.session_cost_limit
             name: Laden bis Kosten (0 = aus)
