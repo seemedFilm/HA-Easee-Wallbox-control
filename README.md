@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.11** · HA Package **v2.11** · Dashboard **v1.10** · Telegram-Menü **v1.5**
+**Aktueller Stand:** Node-RED Flow **v2.12** · HA Package **v2.11** · Dashboard **v1.10** · Telegram-Menü **v1.5**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -12,7 +12,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.11_2026-11-05.json`](smartes_pv_laden_flow_v2.11_2026-11-05.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`smartes_pv_laden_flow_v2.12_2026-11-08.json`](smartes_pv_laden_flow_v2.12_2026-11-08.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
 | [`wallbox_telegram_flow_v1.5_2026-11-05.json`](wallbox_telegram_flow_v1.5_2026-11-05.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
@@ -250,7 +250,7 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.11_2026-11-05.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.12_2026-11-08.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
 4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
@@ -368,7 +368,7 @@ Derzeit keine bekannten Probleme.
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.11_2026-11-05.json       # Node-RED Flow (aktuell)
+├── smartes_pv_laden_flow_v2.12_2026-11-08.json       # Node-RED Flow (aktuell)
 ├── wallbox_telegram_flow_v1.5_2026-11-05.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
@@ -381,6 +381,9 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Flow v2.12 (2026-11-08)
+- **Fix Überbrückung:** Die Wolken-Überbrückung (Mindeststrom bis `bridge_max_minutes`) greift nur noch, wenn im Zyklus davor wirklich mit PV-Überschuss geladen wurde (`flow.pv_charge_active`). Anlass: Die Easee startet beim Einstecken von selbst mit 32 A. Bei zu wenig PV hat der Flow das als Wolke gewertet und 10 min mit 7 A aus dem Netz geladen. Jetzt wird in diesem Fall sofort gestoppt, ebenso nach Ende einer Günstigstrom-Phase oder des Modus „Laden“. Nach abgelaufener Überbrückung beginnt keine neue mehr
 
 ### Flow v2.11 / Package v2.11 / Dashboard v1.10 / Telegram-Menü v1.5 (2026-11-05)
 - **Laden bis Reichweite (nur dieser Ladevorgang):** `input_number.session_range_limit` in km (0 = aus, 0–400, Schritt 10). Der Flow stoppt in allen Modi, sobald `sensor.zoe_battery_autonomy` die Grenze erreicht. Weil die Reichweite eine Schätzung der Zoe ist und nach dem Stopp wieder etwas sinken kann, merkt sich der Flow das Erreichen (`range_reached_limit`) und startet erst wieder, wenn die Grenze geändert oder abgesteckt wird. Unbekannte Reichweite → Grenze wird ignoriert
