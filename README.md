@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.13** · HA Package **v2.12** · Dashboard **v1.11** · Telegram-Menü **v1.6**
+**Aktueller Stand:** Node-RED Flow **v2.13** · HA Package **v2.12** · Dashboard **v1.11** · Telegram-Menü **v1.7**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -13,7 +13,7 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 | Datei | Zweck |
 |---|---|
 | [`smartes_pv_laden_flow_v2.13_2026-11-14.json`](smartes_pv_laden_flow_v2.13_2026-11-14.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
-| [`wallbox_telegram_flow_v1.6_2026-11-14.json`](wallbox_telegram_flow_v1.6_2026-11-14.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
+| [`wallbox_telegram_flow_v1.7_2026-11-14.json`](wallbox_telegram_flow_v1.7_2026-11-14.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -267,7 +267,7 @@ enableGlobalContextStore: true
 Steuert die Wallbox per Telegram-Bot: `/wallbox` schickt Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, für diesen Ladevorgang: bis SOC ±5 %, bis km, Zeitladen ±30 min/+1 h, Zeitfenster an/aus und Kostenbudget −1/+1/+5 €, Aktualisieren). Die Buttons setzen nur die HA-Helfer (`input_select.lade_modus`, `input_boolean.soc_override`, `input_number.car_target_soc`) — die eigentliche Steuerung macht weiterhin der PV-Laden-Flow.
 
 1. Palette `node-red-contrib-telegrambot` installieren und einen Bot-Config-Node anlegen (Token von @BotFather, unter *Users/ChatIds* nur die eigenen Chat-IDs freigeben).
-2. Menü → Import → `wallbox_telegram_flow_v1.6_2026-11-14.json` → *Import to: new flow*.
+2. Menü → Import → `wallbox_telegram_flow_v1.7_2026-11-14.json` → *Import to: new flow*.
 3. In den Telegram-Nodes (`/wallbox`, *Button gedrückt*, *senden*) den eigenen Bot wählen, im Node *HA-Helfer setzen* den Home-Assistant-Server.
 4. Deploy, dann im Chat `/wallbox` senden.
 
@@ -371,7 +371,7 @@ Derzeit keine bekannten Probleme.
 ```
 ├── README.md                                        # Diese Datei
 ├── smartes_pv_laden_flow_v2.13_2026-11-14.json       # Node-RED Flow (aktuell)
-├── wallbox_telegram_flow_v1.6_2026-11-14.json       # optional: Telegram-Menü /wallbox
+├── wallbox_telegram_flow_v1.7_2026-11-14.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -383,6 +383,9 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Telegram-Menü v1.7 (2026-11-14)
+- **Watchdog gegen hängende Abfrage:** Nach kurzen Netzfehlern (`EFATAL: fetch failed`, `ECONNRESET`, Log „Polling error --> Trying again.“) fragte node-red-contrib-telegrambot 19.0.3 manchmal nicht mehr bei Telegram ab, obwohl der Status grün („polling“) blieb. Der Komplett-Neuaufbau der Bibliothek greift erst ab 5 Fehlern pro Minute. Neu im Tab: Eine `telegram control`-Node meldet jedes abgeschlossene `getUpdates` (gesund: etwa alle 10 s). Bleibt das 2 min aus, baut der Watchdog den Bot über die control-Node neu auf (`restart`). Hilft das nach 3 min nicht, kommt eine Push-Nachricht (`notify.mobile_app_…`, anpassen), danach alle 15 min ein weiterer Versuch. Die Erholung wird ebenfalls gemeldet. Node-RED startet sich bewusst nicht selbst neu
 
 ### Flow v2.13 / Package v2.12 / Dashboard v1.11 / Telegram-Menü v1.6 (2026-11-14)
 - **Zeitladen (nur dieser Ladevorgang):** Dauer ab jetzt (`input_number.session_charge_hours`, 0,5–12 h) und/oder Zeitfenster von–bis (`input_boolean.session_window_enabled`, `input_datetime.session_window_start`/`_end`). `binary_sensor.zeitladen_aktiv` fasst beides zusammen (Attribute `quelle` = dauer/fenster, `bis`). Aktiv → Laden mit `max_charge_current` wie im Modus „Laden“, in allen Modi außer „Stoppen“. Batterie-Priorität gilt dabei nicht (Netzladen), SOC-/km-Grenzen und Kostenbudget schon. Nach dem Ende stoppt Automatik/Nur PV sofort, falls kein PV-Überschuss da ist
