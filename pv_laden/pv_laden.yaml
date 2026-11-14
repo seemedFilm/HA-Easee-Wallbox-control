@@ -1,10 +1,17 @@
 # ============================================================
-# PV-Laden Package v2.11
+# PV-Laden Package v2.12
 # Smartes PV-Überschussladen für Easee Wallbox + RCT + Zoe
 #
 # Installation: Kopiere nach /config/packages/pv_laden.yaml
-# Voraussetzung: Node-RED Flow v2.11 oder neuer
+# Voraussetzung: Node-RED Flow v2.13 oder neuer
 #
+# v2.12 (2026-11-14): Zeitladen für den aktuellen Ladevorgang (Reset beim Ausstecken):
+#   - Dauer ab jetzt: input_number.session_charge_hours (0 = aus). HA rechnet daraus
+#     input_datetime.session_charge_until; Ändern der Dauer verschiebt das Ende ab dem Start.
+#   - Zeitfenster: input_boolean.session_window_enabled + input_datetime.session_window_start/
+#     _end (über Mitternacht möglich).
+#   binary_sensor.zeitladen_aktiv fasst beides zusammen; der Flow lädt dann mit max. Strom
+#   (alle Modi außer stoppen; SOC-/km-Grenzen und Kostenbudget gelten weiter).
 # v2.11 (2026-11-05): Ladevorgang bis Restreichweite: input_number.session_range_limit (km,
 #   0 = aus, Reset beim Ausstecken). Quelle sensor.zoe_battery_autonomy. Der Flow stoppt,
 #   sobald die Grenze erreicht ist; die 80-%-Grenze ohne Override gilt weiterhin.
@@ -66,6 +73,11 @@ input_boolean:
     name: Günstigstrom-Fallback in Automatik
     icon: mdi:cash
     initial: false
+
+  # v2.12: Zeitfenster für diesen Ladevorgang (ohne "initial", Reset beim Ausstecken)
+  session_window_enabled:
+    name: Ladevorgang im Zeitfenster laden
+    icon: mdi:clock-time-ten-outline
 
   # Legacy (v1.7) — nur Dashboard
   system_enabled:
@@ -143,6 +155,16 @@ input_number:
     max: 400
     step: 10
     unit_of_measurement: km
+    mode: slider
+
+  # v2.12: Zeitladen – Dauer ab dem Einstellen (0 = aus)
+  session_charge_hours:
+    name: Ladevorgang Zeitladen Dauer
+    icon: mdi:timer-play-outline
+    min: 0
+    max: 12
+    step: 0.5
+    unit_of_measurement: h
     mode: slider
 
   session_cost_limit:
@@ -245,6 +267,27 @@ input_number:
     unit_of_measurement: '%'
     mode: slider
     initial: 80
+
+# --- v2.12: Zeitladen ---
+input_datetime:
+  # Ende der Dauer – setzt die Automation session_charge_duration_set (intern)
+  session_charge_until:
+    name: Zeitladen bis
+    icon: mdi:timer-stop-outline
+    has_date: true
+    has_time: true
+
+  session_window_start:
+    name: Zeitfenster Beginn
+    icon: mdi:clock-start
+    has_date: false
+    has_time: true
+
+  session_window_end:
+    name: Zeitfenster Ende
+    icon: mdi:clock-end
+    has_date: false
+    has_time: true
 
 # --- Template Sensoren ---
 template:
@@ -365,6 +408,8 @@ template:
           {% set range_lim = states('input_number.session_range_limit') | float(0) %}
           {% set range_raw = states('sensor.zoe_battery_autonomy') %}
           {% set cheap = is_state('binary_sensor.tibber_is_cheapest_now', 'on') %}
+          {% set timed = is_state('binary_sensor.zeitladen_aktiv', 'on') %}
+          {% set win_on = is_state('input_boolean.session_window_enabled', 'on') %}
           {% if not plugged %}Warte auf Auto-Anschluss
           {% elif mode == 'stoppen' %}Manuell gestoppt
           {% elif sess_soc > 0 and car_soc >= target_soc %}Ladevorgang-Ziel {{ target_soc | int }}% erreicht
@@ -372,6 +417,7 @@ template:
           {% elif budget > 0 and cost >= budget and (mode in ['laden', 'günstigster_strom'] or not charging) %}Kostenbudget erreicht ({{ '%.2f' | format(cost) }} / {{ '%.2f' | format(budget) }} €){{ '' if mode in ['laden', 'günstigster_strom'] else ' – nur noch PV' }}
           {% elif car_soc >= target_soc and not override %}Auto-SOC Limit ({{ target_soc | int }}%) – Override erforderlich zum Weiterladen
           {% elif car_soc >= target_soc and target_soc > 80 %}Ziel {{ target_soc | int }}% erreicht (Override)
+          {% elif timed and not (budget > 0 and cost >= budget) %}{{ 'Zeitfenster' if state_attr('binary_sensor.zeitladen_aktiv', 'quelle') == 'fenster' else 'Zeitladen' }} bis {{ state_attr('binary_sensor.zeitladen_aktiv', 'bis') }} ({{ states('input_number.max_charge_current') | int }}A)
           {% elif car_soc >= target_soc and override and mode == 'laden' %}Laden erzwungen (ÜBER {{ target_soc | int }}%!, {{ states('input_number.max_charge_current') | int }}A)
           {% elif car_soc >= target_soc and override %}Lädt über {{ target_soc | int }}% hinaus (Override aktiv, {{ states('sensor.calculated_charge_current') }}A)
           {% elif mode == 'laden' %}Laden erzwungen ({{ states('input_number.max_charge_current') | int }}A)
@@ -379,6 +425,7 @@ template:
           {% elif mode == 'günstigster_strom' %}Warte auf Tagestief-Strompreis (+{{ states('input_number.cheap_price_tolerance_ct') | float(3) }} ct)
           {% elif cheap and mode == 'automatik' and is_state('input_boolean.tibber_enabled', 'on') %}Günstigstrom-Fallback ({{ states('input_number.max_charge_current') | int }}A)
           {% elif charging %}Lädt ({{ states('sensor.calculated_charge_current') }}A)
+          {% elif win_on %}Bereit (warte auf Überschuss oder Zeitfenster ab {{ states('input_datetime.session_window_start')[:5] }})
           {% else %}Bereit (warte auf Überschuss)
           {% endif %}
 
@@ -411,6 +458,39 @@ template:
           {{ (price * grid_charge_kw) | round(6) }}
 
   - binary_sensor:
+      # v2.12: Zeitladen aktiv = Dauer läuft noch ODER Zeitfenster ist gerade offen.
+      # now() aktualisiert das Template jede volle Minute.
+      - name: "Zeitladen aktiv"
+        unique_id: zeitladen_aktiv
+        icon: mdi:timer-play
+        state: >
+          {% set h = states('input_number.session_charge_hours') | float(0) %}
+          {% set until = state_attr('input_datetime.session_charge_until', 'timestamp') %}
+          {% set dur = h > 0 and until is number and now().timestamp() < until %}
+          {% set s = states('input_datetime.session_window_start')[:5] %}
+          {% set e = states('input_datetime.session_window_end')[:5] %}
+          {% set t = now().strftime('%H:%M') %}
+          {% set win = is_state('input_boolean.session_window_enabled', 'on') and
+                       ((s <= t < e) if s < e else (t >= s or t < e) if s > e else false) %}
+          {{ dur or win }}
+        attributes:
+          quelle: >
+            {% set h = states('input_number.session_charge_hours') | float(0) %}
+            {% set until = state_attr('input_datetime.session_charge_until', 'timestamp') %}
+            {% set s = states('input_datetime.session_window_start')[:5] %}
+            {% set e = states('input_datetime.session_window_end')[:5] %}
+            {% set t = now().strftime('%H:%M') %}
+            {% if h > 0 and until is number and now().timestamp() < until %}dauer
+            {% elif is_state('input_boolean.session_window_enabled', 'on') and
+                    ((s <= t < e) if s < e else (t >= s or t < e) if s > e else false) %}fenster
+            {% else %}aus{% endif %}
+          bis: >
+            {% set h = states('input_number.session_charge_hours') | float(0) %}
+            {% set until = state_attr('input_datetime.session_charge_until', 'timestamp') %}
+            {% if h > 0 and until is number and now().timestamp() < until %}{{ until | timestamp_custom('%H:%M') }}
+            {% elif is_state('input_boolean.session_window_enabled', 'on') %}{{ states('input_datetime.session_window_end')[:5] }}
+            {% else %}–{% endif %}
+
       - name: "Tibber Is Cheapest Now"
         unique_id: tibber_is_cheapest_now
         icon: mdi:cash-check
@@ -540,6 +620,71 @@ automation:
             - input_number.session_soc_limit
             - input_number.session_range_limit
             - input_number.session_cost_limit
+            - input_number.session_charge_hours
+        data:
+          value: 0
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.session_window_enabled
+
+  # --- v2.12: Zeitladen (Dauer) ---
+  # Ende = Start + Dauer. Läuft die Dauer schon, wird das Ende ab dem ursprünglichen Start
+  # verschoben (2 h -> 3 h = 1 h länger), sonst beginnt sie jetzt.
+  - id: session_charge_duration_set
+    alias: "PV-Laden: Zeitladen-Dauer gesetzt"
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id: input_number.session_charge_hours
+    variables:
+      old_h: "{{ trigger.from_state.state | float(0) if trigger.from_state else 0 }}"
+      new_h: "{{ trigger.to_state.state | float(0) }}"
+      cur_until: "{{ state_attr('input_datetime.session_charge_until', 'timestamp') | float(0) }}"
+      base: >
+        {{ (cur_until - old_h * 3600) if old_h > 0 and cur_until > now().timestamp() else now().timestamp() }}
+      new_until: "{{ (base + new_h * 3600) | int }}"
+    action:
+      - choose:
+          - conditions: "{{ new_h > 0 and new_until > now().timestamp() }}"
+            sequence:
+              - service: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.session_charge_until
+                data:
+                  timestamp: "{{ new_until }}"
+          - conditions: "{{ new_h > 0 }}"
+            sequence:
+              # Dauer kürzer als die bereits gelaufene Zeit -> aus
+              - service: input_number.set_value
+                target:
+                  entity_id: input_number.session_charge_hours
+                data:
+                  value: 0
+        default:
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.session_charge_until
+            data:
+              timestamp: "{{ now().timestamp() | int }}"
+
+  - id: session_charge_duration_expired
+    alias: "PV-Laden: Zeitladen-Dauer abgelaufen"
+    trigger:
+      - platform: time
+        at: input_datetime.session_charge_until
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: numeric_state
+        entity_id: input_number.session_charge_hours
+        above: 0
+      - condition: template
+        value_template: >
+          {{ state_attr('input_datetime.session_charge_until', 'timestamp') | float(0) <= now().timestamp() + 1 }}
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.session_charge_hours
         data:
           value: 0
 

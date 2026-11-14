@@ -1,4 +1,4 @@
-# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.10
+# Home Assistant Lovelace Dashboard für Smartes PV-Laden v1.11
 #
 # Installation:
 # 1. Settings → Dashboards → "+ Add Dashboard"
@@ -9,6 +9,9 @@
 # 6. Diesen YAML-Code einfügen
 #
 # ===== REVISIONSHISTORIE =====
+# v1.11 (2026-11-14): Zeitladen (Package v2.12/Flow v2.13): input_number.session_charge_hours,
+#   input_boolean.session_window_enabled, input_datetime.session_window_start/_end,
+#   binary_sensor.zeitladen_aktiv
 # v1.10 (2026-11-05): Laden bis Reichweite (Package/Flow v2.11): input_number.session_range_limit
 # v1.9 (2026-10-08): Grenzen nur für den aktuellen Ladevorgang (Package/Flow v2.9):
 #   input_number.session_soc_limit, input_number.session_cost_limit, sensor.wallbox_session_cost
@@ -514,6 +517,26 @@ views:
             name: Laden bis Reichweite (0 = aus)
             icon: mdi:map-marker-distance
 
+          - entity: input_number.session_charge_hours
+            name: Laden für Dauer ab jetzt (0 = aus)
+            icon: mdi:timer-play-outline
+
+          - entity: input_boolean.session_window_enabled
+            name: Im Zeitfenster laden
+            icon: mdi:clock-time-ten-outline
+
+          - entity: input_datetime.session_window_start
+            name: Zeitfenster Beginn
+            icon: mdi:clock-start
+
+          - entity: input_datetime.session_window_end
+            name: Zeitfenster Ende
+            icon: mdi:clock-end
+
+          - entity: binary_sensor.zeitladen_aktiv
+            name: Zeitladen aktiv
+            icon: mdi:timer-play
+
           - entity: input_number.session_cost_limit
             name: Laden bis Kosten (0 = aus)
             icon: mdi:cash-lock
@@ -776,6 +799,26 @@ views:
           - entity: input_number.session_range_limit
             name: Laden bis Reichweite (0 = aus)
             icon: mdi:map-marker-distance
+
+          - entity: input_number.session_charge_hours
+            name: Laden für Dauer ab jetzt (0 = aus)
+            icon: mdi:timer-play-outline
+
+          - entity: input_boolean.session_window_enabled
+            name: Im Zeitfenster laden
+            icon: mdi:clock-time-ten-outline
+
+          - entity: input_datetime.session_window_start
+            name: Zeitfenster Beginn
+            icon: mdi:clock-start
+
+          - entity: input_datetime.session_window_end
+            name: Zeitfenster Ende
+            icon: mdi:clock-end
+
+          - entity: binary_sensor.zeitladen_aktiv
+            name: Zeitladen aktiv
+            icon: mdi:timer-play
 
           - entity: input_number.session_cost_limit
             name: Laden bis Kosten (0 = aus)

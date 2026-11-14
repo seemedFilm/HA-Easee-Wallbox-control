@@ -4,7 +4,7 @@ Intelligentes PV-Überschussladen für Easee Wallbox mit RCT Power Wechselrichte
 
 Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren PV-Überschusses, schützt die Hausbatterie vor ungewollter Entladung und nutzt optional den günstigsten Netzstrompreis des Tages zum Laden. Zusätzlich werden die Kosten für den aus dem Netz geladenen Anteil pro Monat ausgewertet.
 
-**Aktueller Stand:** Node-RED Flow **v2.12** · HA Package **v2.11** · Dashboard **v1.10** · Telegram-Menü **v1.5**
+**Aktueller Stand:** Node-RED Flow **v2.13** · HA Package **v2.12** · Dashboard **v1.11** · Telegram-Menü **v1.6**
 
 [![Lizenz: CC BY-NC-SA 4.0](https://img.shields.io/badge/Lizenz-CC%20BY--NC--SA%204.0-lightgrey.svg)](#lizenz) — nicht kommerziell; kommerzielle Nutzung nur nach Rücksprache.
 
@@ -12,8 +12,8 @@ Das System regelt den Ladestrom der Wallbox automatisch anhand des verfügbaren 
 
 | Datei | Zweck |
 |---|---|
-| [`smartes_pv_laden_flow_v2.12_2026-11-08.json`](smartes_pv_laden_flow_v2.12_2026-11-08.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
-| [`wallbox_telegram_flow_v1.5_2026-11-05.json`](wallbox_telegram_flow_v1.5_2026-11-05.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
+| [`smartes_pv_laden_flow_v2.13_2026-11-14.json`](smartes_pv_laden_flow_v2.13_2026-11-14.json) | Node-RED Flow — die eigentliche Lade-Logik (30-s-Zyklus) |
+| [`wallbox_telegram_flow_v1.6_2026-11-14.json`](wallbox_telegram_flow_v1.6_2026-11-14.json) | Optional: Node-RED Tab „Wallbox Telegram“ — `/wallbox`-Menü zum Bedienen per Telegram |
 | [`pv_laden/pv_laden.yaml`](pv_laden/pv_laden.yaml) | Home Assistant Package — Helper, Template-Sensoren, Automationen, Kostenauswertung |
 | [`pv_laden/README.md`](pv_laden/README.md) | Detail-Doku aller Entities des Packages |
 | [`home-assistant-dashboard.yaml`](home-assistant-dashboard.yaml) | Lovelace-Dashboard (Übersicht, Verlauf, Einstellungen) |
@@ -95,6 +95,7 @@ Alle Parameter werden live aus Home Assistant gelesen und sofort wirksam.
 | `battery_priority` | an | Hausbatterie hat beim **PV-Laden** Vorrang — Auto wird erst mit PV geladen, wenn Haus-SOC ≥ `min_battery_soc`. Gilt nicht für „Laden erzwingen“, „Günstigster Strom“ und den Automatik-Günstigstrom-Fallback |
 | `prevent_battery_discharge` | an | Aktiviert den RCT Battery Lock während die Wallbox lädt + korrigiert die Überschussberechnung |
 | `soc_override` | aus | Erlaubt Laden über das Ziel-SOC hinaus — gilt einheitlich in **allen** Modi |
+| `session_window_enabled` | aus | Nur dieser Ladevorgang: im Zeitfenster `session_window_start`–`session_window_end` (`input_datetime`, über Mitternacht möglich, Standard 22:00–05:00) mit `max_charge_current` laden. Reset beim Ausstecken |
 | `tibber_enabled` | aus | Aktiviert den Günstigstrom-**Fallback im Automatik-Modus** bei PV-Mangel. Der eigenständige Modus "Günstigster Strom" ist davon unabhängig |
 
 ### Zahlenwerte (input_number)
@@ -107,6 +108,7 @@ Alle Parameter werden live aus Home Assistant gelesen und sofort wirksam.
 | `min_battery_soc` | 95% | 50–100% | Haus-Batterie erst auf diesen SOC laden, bevor Auto dran ist |
 | `session_soc_limit` | 0 (aus) | 0–100% | Nur dieser Ladevorgang: Laden bis Auto-SOC, ersetzt `car_target_soc` (über 80 % nur mit Override). Reset beim Ausstecken |
 | `session_range_limit` | 0 (aus) | 0–400 km | Nur dieser Ladevorgang: Laden bis Restreichweite (`sensor.zoe_battery_autonomy`). Erreicht → Stopp in allen Modi; bleibt gestoppt, auch wenn die Schätzung danach etwas sinkt (bis Grenze geändert oder abgesteckt). Die 80-%-Grenze ohne Override gilt weiterhin. Reset beim Ausstecken |
+| `session_charge_hours` | 0 (aus) | 0–12 h | Nur dieser Ladevorgang: ab dem Einstellen so lange mit `max_charge_current` laden, in allen Modi außer „Stoppen“. Ändern der Dauer verschiebt das Ende ab dem ursprünglichen Start (`input_datetime.session_charge_until`). Abgelaufen → 0, der Modus läuft normal weiter. SOC-/km-Grenzen und Kostenbudget gelten weiter. Reset beim Ausstecken |
 | `session_cost_limit` | 0 (aus) | 0–50 € | Nur dieser Ladevorgang: Netzladekosten-Budget (`sensor.wallbox_session_cost`). Erreicht → „Laden“/„Günstigster Strom“ stoppen, Automatik/Nur PV laden nur noch mit PV. Reset beim Ausstecken |
 | `car_target_soc` | 80% | 50–100% | Auto-Ziel-SOC. Über 80 % nur mit `soc_override` (sonst automatisch auf 80 % zurückgesetzt) |
 | `cheap_price_tolerance_ct` | 3 ct | 0–15 ct | Toleranz über dem Tagestief, bis zu der Strom als „günstig“ gilt (Modus Günstigster Strom + Automatik-Fallback) |
@@ -250,7 +252,7 @@ Um 403-Fehler bei der Easee API zu vermeiden:
 ### 2. Node-RED Flow importieren
 
 1. Node-RED öffnen (Add-on, z. B. `http://homeassistant.local:1880`)
-2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.12_2026-11-08.json` → *Import to: new flow*
+2. Menü → Import → Datei: `smartes_pv_laden_flow_v2.13_2026-11-14.json` → *Import to: new flow*
 3. Im Flow den **Home-Assistant-Server-Node** auf deine Instanz setzen.
 4. Die **Easee Device-ID** anpassen: Der Flow enthält die Device-ID `b5b0134f3c9b9d7da1fe77ff580320f2`. Deine eigene findest du in HA unter *Geräte → Easee → URL* (`/config/devices/device/<id>`). Am einfachsten per Suchen/Ersetzen in der JSON-Datei vor dem Import.
 5. Deploy.
@@ -262,10 +264,10 @@ enableGlobalContextStore: true
 
 ### 3. Telegram-Menü (optional)
 
-Steuert die Wallbox per Telegram-Bot: `/wallbox` schickt Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, für diesen Ladevorgang: bis SOC ±5 % und Kostenbudget −1/+1/+5 €, Aktualisieren). Die Buttons setzen nur die HA-Helfer (`input_select.lade_modus`, `input_boolean.soc_override`, `input_number.car_target_soc`) — die eigentliche Steuerung macht weiterhin der PV-Laden-Flow.
+Steuert die Wallbox per Telegram-Bot: `/wallbox` schickt Status + Buttons (Modus, SOC-Override, Ziel-SOC ±5 %, für diesen Ladevorgang: bis SOC ±5 %, bis km, Zeitladen ±30 min/+1 h, Zeitfenster an/aus und Kostenbudget −1/+1/+5 €, Aktualisieren). Die Buttons setzen nur die HA-Helfer (`input_select.lade_modus`, `input_boolean.soc_override`, `input_number.car_target_soc`) — die eigentliche Steuerung macht weiterhin der PV-Laden-Flow.
 
 1. Palette `node-red-contrib-telegrambot` installieren und einen Bot-Config-Node anlegen (Token von @BotFather, unter *Users/ChatIds* nur die eigenen Chat-IDs freigeben).
-2. Menü → Import → `wallbox_telegram_flow_v1.5_2026-11-05.json` → *Import to: new flow*.
+2. Menü → Import → `wallbox_telegram_flow_v1.6_2026-11-14.json` → *Import to: new flow*.
 3. In den Telegram-Nodes (`/wallbox`, *Button gedrückt*, *senden*) den eigenen Bot wählen, im Node *HA-Helfer setzen* den Home-Assistant-Server.
 4. Deploy, dann im Chat `/wallbox` senden.
 
@@ -368,8 +370,8 @@ Derzeit keine bekannten Probleme.
 
 ```
 ├── README.md                                        # Diese Datei
-├── smartes_pv_laden_flow_v2.12_2026-11-08.json       # Node-RED Flow (aktuell)
-├── wallbox_telegram_flow_v1.5_2026-11-05.json       # optional: Telegram-Menü /wallbox
+├── smartes_pv_laden_flow_v2.13_2026-11-14.json       # Node-RED Flow (aktuell)
+├── wallbox_telegram_flow_v1.6_2026-11-14.json       # optional: Telegram-Menü /wallbox
 ├── home-assistant-dashboard.yaml                    # Lovelace-Dashboard
 ├── pv_laden/
 │   ├── pv_laden.yaml                                # HA Package (Single-File)
@@ -381,6 +383,13 @@ Derzeit keine bekannten Probleme.
 ---
 
 ## Changelog
+
+### Flow v2.13 / Package v2.12 / Dashboard v1.11 / Telegram-Menü v1.6 (2026-11-14)
+- **Zeitladen (nur dieser Ladevorgang):** Dauer ab jetzt (`input_number.session_charge_hours`, 0,5–12 h) und/oder Zeitfenster von–bis (`input_boolean.session_window_enabled`, `input_datetime.session_window_start`/`_end`). `binary_sensor.zeitladen_aktiv` fasst beides zusammen (Attribute `quelle` = dauer/fenster, `bis`). Aktiv → Laden mit `max_charge_current` wie im Modus „Laden“, in allen Modi außer „Stoppen“. Batterie-Priorität gilt dabei nicht (Netzladen), SOC-/km-Grenzen und Kostenbudget schon. Nach dem Ende stoppt Automatik/Nur PV sofort, falls kein PV-Überschuss da ist
+- Automationen `session_charge_duration_set` (Ende = Start + Dauer) und `session_charge_duration_expired` (Dauer → 0), Reset beim Ausstecken; Status-Text „Zeitladen/Zeitfenster bis …“
+- **Weniger Cloud-Aufrufe:** Bei „Laden“ und Zeitladen gehen resume und Ladestrom nur noch an die Easee, wenn sie nicht lädt (höchstens 1×/min), der Strom abweicht oder der Akku-Lock fehlt. Vorher alle 30 s
+- Telegram: Zeile „Zeit“, Knöpfe „−30 min | bis … ✕ | +30 min | +1 h“ (`wb:d`) und „Fenster … ein/ausschalten“ (`wb:f`). Die Fensterzeiten werden im Dashboard eingestellt
+- Dashboard: Dauer, Zeitfenster an/aus, Beginn, Ende und „Zeitladen aktiv“ unter „Laden bis Reichweite“
 
 ### Flow v2.12 (2026-11-08)
 - **Fix Überbrückung:** Die Wolken-Überbrückung (Mindeststrom bis `bridge_max_minutes`) greift nur noch, wenn im Zyklus davor wirklich mit PV-Überschuss geladen wurde (`flow.pv_charge_active`). Anlass: Die Easee startet beim Einstecken von selbst mit 32 A. Bei zu wenig PV hat der Flow das als Wolke gewertet und 10 min mit 7 A aus dem Netz geladen. Jetzt wird in diesem Fall sofort gestoppt, ebenso nach Ende einer Günstigstrom-Phase oder des Modus „Laden“. Nach abgelaufener Überbrückung beginnt keine neue mehr
